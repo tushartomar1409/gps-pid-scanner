@@ -6,6 +6,7 @@ import { Button } from '../components/Button.jsx';
 import { scopeLabel } from '../utils/format.js';
 import { usePermission } from '../auth/usePermission.js';
 import { GpsStatusBadge } from '../components/GpsStatusBadge.jsx';
+import { ConfirmDialog } from '../components/ConfirmDialog.jsx';
 import { LiveIndicator } from '../components/LiveIndicator.jsx';
 
 function Brand() {
@@ -21,7 +22,7 @@ function Brand() {
 }
 
 export function AppLayout() {
-  const { user, logout } = useAuth();
+  const { user, logout, logoutAll } = useAuth();
   const can = usePermission();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
@@ -32,6 +33,19 @@ export function AppLayout() {
   const handleLogout = async () => {
     setLoggingOut(true);
     await logout();
+  };
+
+  const [confirmAll, setConfirmAll] = useState(false);
+  const [loggingOutAll, setLoggingOutAll] = useState(false);
+  const [allError, setAllError] = useState(null);
+  const handleLogoutAll = async () => {
+    setLoggingOutAll(true);
+    try {
+      await logoutAll();
+    } catch {
+      setAllError('Could not reach the server; your other sessions are still active. Please try again.');
+      setLoggingOutAll(false);
+    }
   };
 
   return (
@@ -80,11 +94,24 @@ export function AppLayout() {
             <Button variant="secondary" size="sm" onClick={handleLogout} loading={loggingOut}>
               Logout
             </Button>
+            <Button variant="ghost" size="sm" onClick={() => setConfirmAll(true)} title="Sign out on every device (e.g. a lost phone)">
+              <span className="hidden lg:inline">Log out all sessions</span>
+              <span className="lg:hidden" aria-label="Log out all sessions">⏻</span>
+            </Button>
           </div>
         </header>
         <main className="flex-1 overflow-y-auto px-4 py-6 sm:px-6">
           <Outlet />
         </main>
+        <ConfirmDialog
+          open={confirmAll}
+          title="Log out all sessions?"
+          message={allError || 'You will be signed out on every device and browser where you are logged in, including this one.'}
+          confirmLabel="Log out everywhere"
+          busy={loggingOutAll}
+          onConfirm={handleLogoutAll}
+          onCancel={() => { setConfirmAll(false); setAllError(null); }}
+        />
       </div>
     </div>
   );

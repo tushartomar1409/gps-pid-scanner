@@ -1,6 +1,14 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
+import { buildCsp } from './csp.config.js';
+
+// API_PROXY_TARGET lets the e2e run point the dev/preview proxy at its own backend port.
+const API = process.env.API_PROXY_TARGET || 'http://localhost:5000';
+const PROXY = {
+  '/api': { target: API, changeOrigin: true },
+  '/socket.io': { target: API, changeOrigin: true, ws: true },
+};
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
@@ -27,10 +35,12 @@ export default defineConfig({
   },
   server: {
     port: 5173,
-    proxy: {
-      '/api': { target: 'http://localhost:5000', changeOrigin: true },
-      '/socket.io': { target: 'http://localhost:5000', changeOrigin: true, ws: true },
-    },
+    proxy: PROXY,
+  },
+  // `vite preview` (e2e): same proxy, and the production CSP when CSP=1 (GUIDE #11 C3/D2.9).
+  preview: {
+    proxy: PROXY,
+    headers: process.env.CSP === '1' ? { 'Content-Security-Policy': buildCsp({ tileUrl: process.env.VITE_MAP_TILE_URL }) } : {},
   },
   test: {
     environment: 'jsdom',

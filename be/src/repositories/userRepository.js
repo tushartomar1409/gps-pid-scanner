@@ -24,7 +24,7 @@ export const userRepository = {
 
   async findForLogin(email, executor = defaultDb) {
     const { rows } = await executor.query(
-      `SELECT u.id, u.email, u.password_hash, u.status
+      `SELECT u.id, u.email, u.password_hash, u.status, u.locked_until, (u.locked_until > now()) AS is_locked
          FROM users u WHERE lower(u.email) = lower($1)`,
       [email],
     );
@@ -33,7 +33,7 @@ export const userRepository = {
 
   async findAuthById(id, executor = defaultDb) {
     const { rows } = await executor.query(
-      `SELECT u.id, u.name, u.email, u.status, u.zone_id, u.ward_id, u.agency_id,
+      `SELECT u.id, u.name, u.email, u.status, u.zone_id, u.ward_id, u.agency_id, u.token_version,
               r.role_key, r.permissions
          FROM users u JOIN roles r ON r.id = u.role_id
         WHERE u.id = $1`,

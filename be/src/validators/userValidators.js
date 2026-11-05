@@ -9,7 +9,7 @@ const email = z.string().trim().toLowerCase().pipe(z.email('Invalid email addres
 // bcrypt only uses the first 72 bytes, so cap there.
 const password = z
   .string()
-  .min(8, 'Password must be at least 8 characters')
+  .min(10, 'Password must be at least 10 characters') // GUIDE #11 C2 (+ email / common checks in userService)
   .max(72, 'Password must be at most 72 characters')
   .regex(/[A-Za-z]/, 'Password must contain a letter')
   .regex(/[0-9]/, 'Password must contain a digit');

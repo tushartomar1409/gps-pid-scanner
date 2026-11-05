@@ -34,7 +34,8 @@ describe('auth', () => {
   it('rejects a wrong password with a generic message and logs LOGIN_FAILED', async () => {
     const res = await request(app).post('/api/auth/login').send({ email: admin.user.email, password: 'wrong-Passw0rd' });
     expect(res.status).toBe(401);
-    expect(res.body).toEqual({ success: false, message: 'Invalid email or password' });
+    expect(res.body).toEqual({ success: false, message: 'Invalid email or password', request_id: expect.any(String) });
+    expect(res.headers['x-request-id']).toBe(res.body.request_id);
     const log = await pool.query(
       "SELECT details FROM activity_logs WHERE action = 'LOGIN_FAILED' AND reference_id = $1", [String(admin.user.id)],
     );

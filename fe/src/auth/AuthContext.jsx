@@ -81,7 +81,16 @@ export function AuthProvider({ children, realtime = socketClient }) {
     navigate('/login', { replace: true });
   }, [navigate]);
 
-  const value = useMemo(() => ({ user, status, login, logout }), [user, status, login, logout]);
+  /** Ends every session of this user (all devices); this one too. Throws if the server call fails. */
+  const logoutAll = useCallback(async () => {
+    await authApi.logoutAll();
+    clearToken();
+    setUser(null);
+    setStatus('anonymous');
+    navigate('/login?signedOutAll=1', { replace: true });
+  }, [navigate]);
+
+  const value = useMemo(() => ({ user, status, login, logout, logoutAll }), [user, status, login, logout, logoutAll]);
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 

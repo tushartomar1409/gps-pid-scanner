@@ -10,5 +10,6 @@ export function createAuthRoutes() {
   router.post('/login', createLoginLimiter(), validate({ body: loginSchema }), authController.login);
   router.get('/profile', authenticate, authController.profile);
   router.post('/logout', authenticate, authController.logout);
+  router.post('/logout-all', authenticate, authController.logoutAll); // GUIDE #11 C2
   return router;
 }

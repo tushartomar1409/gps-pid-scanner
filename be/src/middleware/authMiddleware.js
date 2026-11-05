@@ -18,6 +18,8 @@ export async function authenticate(req, _res, next) {
 
   const user = await userRepository.findAuthById(Number(payload.sub));
   if (!user || user.status !== 'ACTIVE') throw unauthorized('Invalid or expired token');
+  // token_version (GUIDE #11 C2): a password change, deactivation or 'log out all sessions' revokes old tokens.
+  if ((payload.tv ?? 0) !== user.token_version) throw unauthorized('Session ended. Please log in again.');
 
   req.user = {
     id: user.id,

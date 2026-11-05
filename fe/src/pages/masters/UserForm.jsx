@@ -21,6 +21,9 @@ export const ROLE_SCOPE = {
   AGENCY_USER: ['agency_id'],
 };
 
+// Mirrors be/src/services/passwordPolicy.js (the server also rejects common passwords).
+export const PASSWORD_HINT = 'At least 10 characters, with a letter and a digit; not your email; not a common password.';
+
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
 export function validateUser(v, isEdit) {
@@ -28,9 +31,11 @@ export function validateUser(v, isEdit) {
   let password = null;
   if (!isEdit && !v.password) password = 'Password is required';
   else if (v.password) {
-    if (v.password.length < 8) password = 'At least 8 characters';
+    const local = v.email.trim().toLowerCase().split('@')[0];
+    if (v.password.length < 10) password = 'At least 10 characters';
     else if (v.password.length > 72) password = 'At most 72 characters';
     else if (!/[A-Za-z]/.test(v.password) || !/[0-9]/.test(v.password)) password = 'Must contain a letter and a digit';
+    else if (v.password.toLowerCase() === v.email.trim().toLowerCase() || (local.length >= 4 && v.password.toLowerCase() === local)) password = 'Must not be your email address';
   }
   return {
     name: !v.name.trim() ? 'Name is required' : null,
@@ -103,7 +108,7 @@ export function UserForm({ formId, initial, isEdit, lookups, serverErrors, onSub
         value={values.password}
         onChange={(e) => setField('password', e.target.value)}
         error={errorFor('password')}
-        hint={isEdit ? 'Leave blank to keep the current password' : 'Min 8 characters, with a letter and a digit'}
+        hint={`${isEdit ? 'Leave blank to keep the current password. ' : ''}${PASSWORD_HINT}`}
       />
       <Select
         label="Role"

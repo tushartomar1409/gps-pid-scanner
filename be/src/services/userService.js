@@ -5,8 +5,20 @@ import { roleRepository } from '../repositories/roleRepository.js';
 import { hashPassword } from './passwordService.js';
 import { resolveZoneWard } from './geoScopeService.js';
 import { recordActivity, ACTIONS } from './activityLogService.js';
-import { notFound, unprocessable } from '../utils/errors.js';
+import { badRequest, notFound, unprocessable } from '../utils/errors.js';
 import { paginationMeta } from '../utils/sql.js';
+import { passwordProblems } from './passwordPolicy.js';
+
+/** GUIDE #11 C2: 400 with field errors when the password violates the policy. */
+function assertPasswordPolicy(password, email) {
+  const problems = passwordProblems(password, email);
+  if (problems.length) throw badRequest('Password does not meet the policy', problems.map((message) => ({ field: 'password', message })));
+}
+
+/** Invalidates every token of a user (password change, deactivation, log out all sessions). */
+export async function bumpTokenVersion(id, tx) {
+  await tx.query('UPDATE users SET token_version = token_version + 1 WHERE id = $1', [id]);
+}
 
 const MODULE = 'users';
 
@@ -74,6 +86,7 @@ export const userService = {
         status: data.status ?? 'ACTIVE',
       };
       await applyRoleScopeRules(role.role_key, rec, tx);
+      assertPasswordPolicy(data.password, rec.email);
       rec.password_hash = await hashPassword(data.password);
       const id = await userRepository.insert(rec, tx);
       await recordActivity(ctx, {
@@ -113,9 +126,14 @@ export const userService = {
         rec.zone_id = null;
       }
       await applyRoleScopeRules(role.role_key, rec, tx);
-      if (data.password) rec.password_hash = await hashPassword(data.password);
+      if (data.password) {
+        assertPasswordPolicy(data.password, rec.email ?? existing.email);
+        rec.password_hash = await hashPassword(data.password);
+      }
 
       await userRepository.update(id, rec, tx);
+      // Password change or deactivation ends every existing session of that user (GUIDE #11 C2).
+      if (data.password || (data.status && data.status !== 'ACTIVE')) await bumpTokenVersion(id, tx);
       await recordActivity(ctx, {
         action: ACTIONS.UPDATE, module: MODULE, referenceId: id,
         details: { ...auditDetails(rec), role_key: role.role_key, password_changed: Boolean(data.password) },
@@ -130,6 +148,7 @@ export const userService = {
       const existing = await userRepository.findById(id, null, tx);
       if (!existing) throw notFound('User not found');
       await userRepository.update(id, { status: 'INACTIVE' }, tx);
+      await bumpTokenVersion(id, tx);
       await recordActivity(ctx, { action: ACTIONS.DEACTIVATE, module: MODULE, referenceId: id }, tx);
       return userRepository.findById(id, null, tx);
     });

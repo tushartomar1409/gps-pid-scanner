@@ -92,13 +92,13 @@ describe('UserForm scope fields', () => {
     const { onSubmit } = await renderForm();
     await userEvent.type(field('Full name'), 'Ravi');
     await userEvent.type(field('Email'), 'Ravi@Test.local');
-    await userEvent.type(field('Password'), 'Passw0rd!');
+    await userEvent.type(field('Password'), 'Passw0rd!x');
     await userEvent.selectOptions(roleSelect(), 'WARD_SUPERVISOR');
     await userEvent.selectOptions(field('Zone'), '1');
     await userEvent.selectOptions(field('Ward'), '10');
     await userEvent.click(screen.getByRole('button', { name: 'Submit' }));
     expect(onSubmit).toHaveBeenCalledWith({
-      name: 'Ravi', email: 'ravi@test.local', password: 'Passw0rd!', role_key: 'WARD_SUPERVISOR',
+      name: 'Ravi', email: 'ravi@test.local', password: 'Passw0rd!x', role_key: 'WARD_SUPERVISOR',
       zone_id: 1, ward_id: 10, agency_id: null,
     });
   });
