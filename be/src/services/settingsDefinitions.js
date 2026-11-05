@@ -16,6 +16,11 @@ export const SETTING_DEFS = {
   'detection.min_dwell_seconds': { schema: z.number().int().min(5).max(3600), default: 60 },
   'detection.late_points_policy': { schema: z.enum(['evidence_only', 'accept']), default: 'evidence_only' },
   'detection.finalize_grace_minutes': { schema: z.number().int().min(0).max(1440), default: 120 },
+  'detection.segment_evidence_enabled': { schema: z.boolean(), default: true },
+  'detection.segment_max_length_m': { schema: z.number().min(20).max(1000), default: 200 },
+  'detection.segment_max_gap_s': { schema: z.number().int().min(5).max(600), default: 90 },
+  'detection.deviation_threshold_m': { schema: z.number().min(5).max(1000), default: 50 },
+  'detection.distance_min_segment_m': { schema: z.number().min(0).max(100), default: 5 },
   'gps.offline_after_seconds': { schema: z.number().int().min(30).max(86_400), default: 300 },
   'gps.poll_interval_seconds': { schema: z.number().int().min(5).max(3600), default: 60 },
   'gps.min_points_for_data_available': { schema: z.number().int().min(0).max(1000), default: 5 },
@@ -48,6 +53,11 @@ export async function loadDetectionSettings(db, overrides = {}) {
     minDwellSeconds: Number(v['detection.min_dwell_seconds']),
     latePointsPolicy: v['detection.late_points_policy'],
     finalizeGraceMinutes: Number(v['detection.finalize_grace_minutes']),
+    segmentEvidenceEnabled: v['detection.segment_evidence_enabled'] !== false,
+    segmentMaxLengthM: Number(v['detection.segment_max_length_m']),
+    segmentMaxGapS: Number(v['detection.segment_max_gap_s']),
+    deviationThresholdM: Number(v['detection.deviation_threshold_m']),
+    distanceMinSegmentM: Number(v['detection.distance_min_segment_m']),
     timezone: v['app.timezone'],
   };
   return { ...s, ...overrides };

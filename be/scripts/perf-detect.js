@@ -95,7 +95,7 @@ try {
   try {
     await client.query('BEGIN');
     const { rows: plan } = await client.query(`EXPLAIN (ANALYZE, BUFFERS) ${CLAIM_AND_DETECT_SQL}`, [
-      5000, settings.timezone, settings.radiusM, settings.maxGpsAgeS, settings.latePointsPolicy, settings.minSpeedKmh, settings.maxSpeedKmh, M_PER_DEG_LAT, MIN_COS_LAT]);
+      5000, settings.timezone, settings.radiusM, settings.maxGpsAgeS, settings.latePointsPolicy, settings.minSpeedKmh, settings.maxSpeedKmh, M_PER_DEG_LAT, MIN_COS_LAT, settings.segmentEvidenceEnabled, settings.segmentMaxLengthM, settings.segmentMaxGapS]);
     await client.query('ROLLBACK');
     console.log('\n== EXPLAIN (ANALYZE, BUFFERS) claim + detect, 5,000 points (rolled back)');
     console.log(plan.map((r) => r['QUERY PLAN']).join('\n'));
@@ -103,7 +103,7 @@ try {
     // Recompute step for the pairs that batch touches (claim executed for real, then rolled back).
     await client.query('BEGIN');
     const { rows: [c] } = await client.query(CLAIM_AND_DETECT_SQL, [
-      5000, settings.timezone, settings.radiusM, settings.maxGpsAgeS, settings.latePointsPolicy, settings.minSpeedKmh, settings.maxSpeedKmh, M_PER_DEG_LAT, MIN_COS_LAT]);
+      5000, settings.timezone, settings.radiusM, settings.maxGpsAgeS, settings.latePointsPolicy, settings.minSpeedKmh, settings.maxSpeedKmh, M_PER_DEG_LAT, MIN_COS_LAT, settings.segmentEvidenceEnabled, settings.segmentMaxLengthM, settings.segmentMaxGapS]);
     for (const mode of ['consecutive_points', 'min_events', 'dwell']) {
       // eslint-disable-next-line no-await-in-loop
       const { rows: p2 } = await client.query(`EXPLAIN (ANALYZE) ${RECOMPUTE_SQL}`, [c.pair_ra, c.pair_pid, mode, 2, 300, 20]);

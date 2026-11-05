@@ -16,6 +16,23 @@ export const M_PER_DEG_LAT = (EARTH_RADIUS_M * Math.PI) / 180;
 export const MIN_COS_LAT = 0.01;
 
 /**
+ * Distance (m) from point P to segment A-B — JS twin of SQL seg_dist_m(). Local equirectangular
+ * projection around A (same sphere), then planar point-to-segment distance. Accurate for short segments
+ * (≤ 200 m: error ≪ GPS noise).
+ */
+export function pointToSegmentMeters(plat, plng, alat, alng, blat, blng) {
+  const c = Math.cos(rad(alat));
+  const px = (plng - alng) * M_PER_DEG_LAT * c;
+  const py = (plat - alat) * M_PER_DEG_LAT;
+  const dx = (blng - alng) * M_PER_DEG_LAT * c;
+  const dy = (blat - alat) * M_PER_DEG_LAT;
+  const dd = dx * dx + dy * dy;
+  if (dd === 0) return Math.hypot(px, py);
+  const t = Math.max(0, Math.min(1, (px * dx + py * dy) / dd));
+  return Math.hypot(px - dx * t, py - dy * t);
+}
+
+/**
  * Bounding box guaranteed to contain every point within radiusM of (lat, lng): a cheap, index-friendly
  * prefilter before the exact Haversine check. A 1 % margin absorbs float/rounding differences.
  */

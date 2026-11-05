@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { pool } from '../../src/config/database.js';
-import { haversineMeters, bboxAround } from '../../src/utils/haversine.js';
+import { haversineMeters, bboxAround, pointToSegmentMeters } from '../../src/utils/haversine.js';
 
 describe('haversine (JS) and haversine_m (SQL)', () => {
   it('matches flow §8.1: (28.4082, 77.3178) <-> (28.4084, 77.3179) ≈ 24 m', async () => {
@@ -27,6 +27,31 @@ describe('haversine (JS) and haversine_m (SQL)', () => {
       cols);
     const maxDiff = Math.max(...rows.map((r, i) => Math.abs(r.d - haversineMeters(...pairs[i]))));
     expect(maxDiff).toBeLessThan(0.01);
+  });
+
+  it('seg_dist_m (SQL) matches pointToSegmentMeters (JS) and known geometry', async () => {
+    // Known case: a segment along a parallel, P offset 15 m north of its middle.
+    const a = [28.5, 77.2];
+    const b = [28.5, 77.2 + 125 / (111_195.08 * Math.cos((28.5 * Math.PI) / 180))];
+    const p = [28.5 + 15 / 111_195.08, (a[1] + b[1]) / 2];
+    expect(pointToSegmentMeters(...p, ...a, ...b)).toBeCloseTo(15, 3);
+    expect(pointToSegmentMeters(...a, ...a, ...a)).toBe(0); // degenerate segment
+    // beyond the end -> distance to the endpoint (≈ haversine)
+    const beyond = [28.5, b[1] + 0.0003];
+    expect(Math.abs(pointToSegmentMeters(...beyond, ...a, ...b) - haversineMeters(...beyond, ...b))).toBeLessThan(0.05);
+
+    let seed = 99;
+    const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+    const rows = Array.from({ length: 500 }, () => {
+      const la = 8 + rnd() * 28; const lo = 69 + rnd() * 27;
+      const d = () => (rnd() - 0.5) * 0.004; // ≤ ~220 m
+      return [la + d(), lo + d(), la, lo, la + d(), lo + d()];
+    });
+    const cols = [0, 1, 2, 3, 4, 5].map((i) => rows.map((r) => r[i]));
+    const { rows: out } = await pool.query(
+      `SELECT seg_dist_m(p1, p2, a1, a2, b1, b2) AS d FROM unnest($1::float8[], $2::float8[], $3::float8[], $4::float8[], $5::float8[], $6::float8[])
+         WITH ORDINALITY AS t(p1, p2, a1, a2, b1, b2, i) ORDER BY i`, cols);
+    expect(Math.max(...out.map((o, i) => Math.abs(o.d - pointToSegmentMeters(...rows[i]))))).toBeLessThan(0.01);
   });
 
   it('bboxAround contains every point at the radius in all directions (incl. high latitude) and clamps near the poles', () => {

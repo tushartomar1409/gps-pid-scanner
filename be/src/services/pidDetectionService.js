@@ -9,7 +9,7 @@ export const DEFAULT_BATCH_SIZE = 5000;
 
 // ---------------------------------------------------------------- Q1: claim + events
 // $1 batch size · $2 tz · $3 radius m · $4 max age s · $5 policy · $6 min speed · $7 max speed
-// $8 metres/deg-lat · $9 min cos(lat)
+// $8 metres/deg-lat · $9 min cos(lat) · $10 segment evidence on · $11 segment max length m · $12 max gap s
 export const CLAIM_AND_DETECT_SQL = `
 WITH batch AS (
   SELECT g.id, g.vehicle_id, g.latitude::float8 AS lat, g.longitude::float8 AS lng, g.speed, g.recorded_at, g.received_at
@@ -61,13 +61,80 @@ cand AS (
    WHERE c.dist <= $3::float8
 ),
 amb AS (SELECT gps_id, ra_id, count(*)::int AS n FROM cand GROUP BY gps_id, ra_id),
+-- ---- TRACK_SEGMENT evidence (GUIDE #8): the line between two strictly adjacent, valid points of the
+-- same vehicle and assignment (gap ≤ $12 s, length ≤ $11 m). For each valid batch point, its previous
+-- point AND (for late arrivals) its next point; the event belongs to the LATER point of the pair.
+nbr AS (
+  SELECT g.ra_id, g.vehicle_id, g.id AS g_id, g.recorded_at AS g_at, g.lat AS g_lat, g.lng AS g_lng, g.speed AS g_speed,
+         n.dir, n.id AS n_id, n.recorded_at AS n_at, n.lat AS n_lat, n.lng AS n_lng, n.speed AS n_speed, n.received_at AS n_received
+    FROM gated g
+    CROSS JOIN LATERAL (
+      (SELECT 'prev' AS dir, q.id, q.recorded_at, q.latitude::float8 AS lat, q.longitude::float8 AS lng, q.speed, q.received_at
+         FROM gps_locations q WHERE q.vehicle_id = g.vehicle_id AND q.recorded_at < g.recorded_at
+        ORDER BY q.recorded_at DESC LIMIT 1)
+      UNION ALL
+      (SELECT 'next', q.id, q.recorded_at, q.latitude::float8, q.longitude::float8, q.speed, q.received_at
+         FROM gps_locations q WHERE q.vehicle_id = g.vehicle_id AND q.recorded_at > g.recorded_at
+        ORDER BY q.recorded_at ASC LIMIT 1)
+    ) n
+   WHERE $10::boolean AND g.evidence = 'PROXIMITY_POINT'
+),
+segs AS (
+  SELECT ra_id, vehicle_id,
+         CASE WHEN dir = 'prev' THEN g_id ELSE n_id END    AS later_id,
+         CASE WHEN dir = 'prev' THEN g_at ELSE n_at END    AS later_at,
+         CASE WHEN dir = 'prev' THEN g_speed ELSE n_speed END AS later_speed,
+         n_lat AS a_lat, n_lng AS a_lng, g_lat AS b_lat, g_lng AS b_lng
+    FROM nbr x
+   WHERE abs(extract(epoch FROM x.g_at - x.n_at)) <= $12::int
+     AND haversine_m(x.n_lat, x.n_lng, x.g_lat, x.g_lng) <= $11::float8
+     -- the neighbour must be valid under the same gates ...
+     AND NOT ($5 = 'evidence_only' AND x.n_received - x.n_at > make_interval(secs => $4::int))
+     AND NOT (x.n_speed IS NOT NULL AND (($6::numeric IS NOT NULL AND x.n_speed < $6::numeric) OR ($7::numeric IS NOT NULL AND x.n_speed > $7::numeric)))
+     -- ... and resolve to the same assignment
+     AND (SELECT y.id FROM route_assignments y
+           WHERE y.vehicle_id = x.vehicle_id AND y.status <> 'CANCELLED'
+             AND ((y.shift_start IS NOT NULL AND x.n_at >= y.shift_start AND x.n_at < y.shift_end)
+                  OR (y.shift_start IS NULL AND y.operational_date = (x.n_at AT TIME ZONE $2)::date))
+           ORDER BY (y.shift_start IS NOT NULL) DESC, y.id LIMIT 1) = x.ra_id
+),
+seg_cand AS (
+  -- PIDs within radius of the segment INTERIOR only: if either endpoint is within radius, point evidence
+  -- already covers it (and the unique key would collide).
+  SELECT DISTINCT ON (s.later_id, s.ra_id, c.pid_id)
+         s.later_id AS gps_id, s.vehicle_id, s.ra_id, s.later_at AS recorded_at, s.later_speed AS speed,
+         'TRACK_SEGMENT'::text AS evidence, c.pid_id, c.dist
+    FROM segs s
+    CROSS JOIN LATERAL (
+      SELECT rap.pid_id,
+             seg_dist_m(rap.pid_latitude::float8, rap.pid_longitude::float8, s.a_lat, s.a_lng, s.b_lat, s.b_lng) AS dist,
+             haversine_m(rap.pid_latitude::float8, rap.pid_longitude::float8, s.a_lat, s.a_lng) AS da,
+             haversine_m(rap.pid_latitude::float8, rap.pid_longitude::float8, s.b_lat, s.b_lng) AS db
+        FROM route_assignment_pids rap
+       WHERE rap.route_assignment_id = s.ra_id
+         AND rap.pid_latitude  BETWEEN (least(s.a_lat, s.b_lat) - $3::float8 / $8::float8 * 1.01)::numeric
+                                   AND (greatest(s.a_lat, s.b_lat) + $3::float8 / $8::float8 * 1.01)::numeric
+         AND rap.pid_longitude BETWEEN (least(s.a_lng, s.b_lng) - $3::float8 / ($8::float8 * greatest(cos(radians(s.a_lat)), $9::float8)) * 1.01)::numeric
+                                   AND (greatest(s.a_lng, s.b_lng) + $3::float8 / ($8::float8 * greatest(cos(radians(s.a_lat)), $9::float8)) * 1.01)::numeric
+      OFFSET 0
+    ) c
+   WHERE c.dist <= $3::float8 AND c.da > $3::float8 AND c.db > $3::float8
+   ORDER BY s.later_id, s.ra_id, c.pid_id, c.dist
+),
+seg_amb AS (SELECT gps_id, ra_id, count(*)::int AS n FROM seg_cand GROUP BY gps_id, ra_id),
 ins AS (
   INSERT INTO pid_visit_events (route_assignment_id, pid_id, vehicle_id, gps_location_id, distance_meters,
                                 speed_at_detection, detected_at, evidence_status, ambiguous, pids_in_radius)
   SELECT c.ra_id, c.pid_id, c.vehicle_id, c.gps_id, round(c.dist::numeric, 2), c.speed, c.recorded_at, c.evidence, a.n >= 2, a.n
     FROM cand c JOIN amb a ON a.gps_id = c.gps_id AND a.ra_id = c.ra_id
+  UNION ALL
+  SELECT c.ra_id, c.pid_id, c.vehicle_id, c.gps_id, round(c.dist::numeric, 2), c.speed, c.recorded_at, c.evidence, a.n >= 2, a.n
+    FROM seg_cand c JOIN seg_amb a ON a.gps_id = c.gps_id AND a.ra_id = c.ra_id
   ON CONFLICT (route_assignment_id, pid_id, gps_location_id) DO NOTHING
   RETURNING id
+),
+touched AS (
+  SELECT DISTINCT ra_id, pid_id FROM (SELECT ra_id, pid_id FROM cand UNION ALL SELECT ra_id, pid_id FROM seg_cand) u
 ),
 activate AS (
   -- id = ANY(array) -> primary-key index scans (an IN-subquery here was planned as a seq scan).
@@ -93,8 +160,9 @@ SELECT (SELECT count(*) FROM batch)::int                       AS points,
        (SELECT count(*) FROM ins)::int                          AS events_inserted,
        (SELECT count(*) FROM activate)::int                     AS assignments_activated,
        (SELECT count(*) FROM late_log)::int                     AS late_after_finalize,
-       COALESCE((SELECT array_agg(ra_id) FROM (SELECT DISTINCT ra_id, pid_id FROM cand) p), '{}') AS pair_ra,
-       COALESCE((SELECT array_agg(pid_id) FROM (SELECT DISTINCT ra_id, pid_id FROM cand) p), '{}') AS pair_pid`;
+       (SELECT count(*) FROM seg_cand)::int                     AS segment_candidates,
+       COALESCE((SELECT array_agg(ra_id ORDER BY ra_id, pid_id) FROM touched), '{}') AS pair_ra,
+       COALESCE((SELECT array_agg(pid_id ORDER BY ra_id, pid_id) FROM touched), '{}') AS pair_pid`;
 
 // ---------------------------------------------------------------- Q2: recompute statuses
 // $1 ra ids · $2 pid ids · $3 mode · $4 N · $5 window s · $6 dwell s
@@ -103,16 +171,22 @@ export const RECOMPUTE_SQL = `
 WITH pairs AS (
   SELECT DISTINCT * FROM unnest($1::bigint[], $2::bigint[]) AS p(ra_id, pid_id)
 ),
-valid AS MATERIALIZED (
-  -- One index probe per pair on (route_assignment_id, pid_id, ...): OFFSET 0 stops the planner from
-  -- flattening this into a hash join over the whole (ever-growing) events table.
-  SELECT p.ra_id, p.pid_id, e.id, e.vehicle_id, e.detected_at, e.distance_meters, e.ambiguous
+evid AS MATERIALIZED (
+  -- All non-rejected evidence of each pair. One index probe per pair on (route_assignment_id, pid_id, …):
+  -- OFFSET 0 stops the planner from flattening this into a hash join over the ever-growing events table.
+  SELECT p.ra_id, p.pid_id, e.id, e.vehicle_id, e.detected_at, e.distance_meters, e.ambiguous,
+         e.evidence_status = 'TRACK_SEGMENT' AS is_seg
     FROM pairs p
     CROSS JOIN LATERAL (
-      SELECT x.id, x.vehicle_id, x.detected_at, x.distance_meters, x.ambiguous
+      SELECT x.id, x.vehicle_id, x.detected_at, x.distance_meters, x.ambiguous, x.evidence_status
         FROM pid_visit_events x
-       WHERE x.route_assignment_id = p.ra_id AND x.pid_id = p.pid_id AND x.evidence_status = 'PROXIMITY_POINT'
+       WHERE x.route_assignment_id = p.ra_id AND x.pid_id = p.pid_id
+         AND x.evidence_status IN ('PROXIMITY_POINT', 'TRACK_SEGMENT')
       OFFSET 0) e
+),
+valid AS (
+  -- Only GPS point fixes take part in confirmation (TRACK_SEGMENT never confirms, never counts towards N).
+  SELECT ra_id, pid_id, id, vehicle_id, detected_at, distance_meters, ambiguous FROM evid WHERE NOT is_seg
 ),
 ordered AS (
   -- lag() for adjacency and the min_events window count in ONE window pass.
@@ -141,18 +215,36 @@ per_island AS (
          (array_agg(id ORDER BY distance_meters, detected_at, id))[1] AS best_id
     FROM islands GROUP BY ra_id, pid_id, grp
 ),
-computed AS (
-  -- Level 2: one row per pair. Single aggregation pass — no joins between aggregates (those were
-  -- planned as nested loops over 1-row CTE estimates and exploded quadratically).
+point_comp AS (
+  -- Level 2 (points): one row per pair with the confirmation verdict.
   SELECT ra_id, pid_id, min(first_at) AS first_at, max(last_at) AS last_at, sum(n)::int AS cnt,
          min(min_d) AS min_d, bool_or(any_amb) AS any_amb,
          (array_agg(best_id ORDER BY min_d, first_at, best_id))[1] AS best_id,
-         CASE WHEN (CASE $3
-                      WHEN 'consecutive_points' THEN max(n) >= $4::int
-                      WHEN 'min_events' THEN max(max_win) >= $4::int
-                      WHEN 'dwell' THEN max(extract(epoch FROM last_at - first_at)) >= $6::int
-                    END) THEN 'GPS_VISIT_CONFIRMED' ELSE 'GPS_VISIT_CANDIDATE' END AS new_status
+         COALESCE(CASE $3
+                    WHEN 'consecutive_points' THEN max(n) >= $4::int
+                    WHEN 'min_events' THEN max(max_win) >= $4::int
+                    WHEN 'dwell' THEN max(extract(epoch FROM last_at - first_at)) >= $6::int
+                  END, false) AS confirmed,
+         0 AS seg_rank
     FROM per_island GROUP BY ra_id, pid_id
+),
+seg_comp AS (
+  -- TRACK_SEGMENT evidence: contributes to first/last/count/distance and makes a pair at most CANDIDATE.
+  SELECT ra_id, pid_id, min(detected_at) AS first_at, max(detected_at) AS last_at, count(*)::int AS cnt,
+         min(distance_meters) AS min_d, bool_or(ambiguous) AS any_amb,
+         (array_agg(id ORDER BY distance_meters, detected_at, id))[1] AS best_id,
+         false AS confirmed, 1 AS seg_rank
+    FROM evid WHERE is_seg GROUP BY ra_id, pid_id
+),
+computed AS (
+  -- Combine both sources in ONE aggregation (no joins between aggregates — those were planned as
+  -- quadratic nested loops over 1-row CTE estimates). best_event prefers a point fix over a segment.
+  SELECT ra_id, pid_id, min(first_at) AS first_at, max(last_at) AS last_at, sum(cnt)::int AS cnt,
+         min(min_d) AS min_d, bool_or(any_amb) AS any_amb,
+         (array_agg(best_id ORDER BY seg_rank, min_d, best_id))[1] AS best_id,
+         CASE WHEN bool_or(confirmed) THEN 'GPS_VISIT_CONFIRMED' ELSE 'GPS_VISIT_CANDIDATE' END AS new_status
+    FROM (SELECT * FROM point_comp UNION ALL SELECT * FROM seg_comp) u
+   GROUP BY ra_id, pid_id
 ),
 with_old AS (
   -- Pre-update status read alongside each pair (index probe per pair) and carried through the UPDATE's
@@ -198,6 +290,7 @@ export async function detectBatch(pool, settings, { batchSize = DEFAULT_BATCH_SI
     const { rows: [r1] } = await q(CLAIM_AND_DETECT_SQL, [
       batchSize, settings.timezone, settings.radiusM, settings.maxGpsAgeS, settings.latePointsPolicy,
       settings.minSpeedKmh, settings.maxSpeedKmh, M_PER_DEG_LAT, MIN_COS_LAT,
+      settings.segmentEvidenceEnabled !== false, settings.segmentMaxLengthM ?? 200, settings.segmentMaxGapS ?? 90,
     ]);
     let changes = [];
     if (r1.pair_ra.length) {

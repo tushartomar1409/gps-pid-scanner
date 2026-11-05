@@ -17,7 +17,7 @@ import { formatZodIssues } from '../middleware/validationMiddleware.js';
 
 const isoDate = z.iso.date('Use YYYY-MM-DD');
 const bool = z.enum(['true', 'false']).transform((v) => v === 'true').optional();
-const EVIDENCE = ['PROXIMITY_POINT', 'CONSECUTIVE_CONFIRMED', 'REJECTED_SPEED', 'REJECTED_STALE'];
+const EVIDENCE = ['PROXIMITY_POINT', 'CONSECUTIVE_CONFIRMED', 'REJECTED_SPEED', 'REJECTED_STALE', 'TRACK_SEGMENT'];
 const NON_CONFIRMED = ['GPS_VISIT_CANDIDATE', 'NOT_VISITED', 'GPS_DATA_UNAVAILABLE'];
 
 const s = {

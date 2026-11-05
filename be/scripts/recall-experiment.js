@@ -40,10 +40,14 @@ const MODES = [
   { key: 'min_events', label: 'min_events N=2/300s', s: { confirmationMode: 'min_events', consecutivePoints: 2, confirmationWindowS: 300 } },
   { key: 'dwell', label: 'dwell 20s', s: { confirmationMode: 'dwell', minDwellSeconds: 20 } },
 ];
-const CELLS = [];
+// --segments: re-run the 30 s rows with TRACK_SEGMENT evidence ON (GUIDE #8). Default run: segments OFF,
+// so the baseline table stays comparable with the Phase 4 report.
+const SEGMENTS = process.argv.includes('--segments');
+let CELLS = [];
 for (const interval of [10, 30, 60]) for (const jitter of [5, 10, 20]) CELLS.push({ interval, jitter, radius: 30, stops: false });
 CELLS.push({ interval: 30, jitter: 10, radius: 50, stops: false });
 CELLS.push({ interval: 30, jitter: 10, radius: 30, stops: true }); // collection stops: 30 s every 60 m
+if (SEGMENTS) CELLS = CELLS.filter((c) => c.interval === 30);
 
 const admin = new pg.Pool(buildConnectionConfig({ schema: undefined }));
 const streetOrigin = (s) => [28.30 + s * 0.005, 77.20];
@@ -164,7 +168,10 @@ try {
 
     for (const mode of MODES) {
       // eslint-disable-next-line no-await-in-loop
-      const settings = await loadDetectionSettings(pool, { radiusM: cell.radius, latePointsPolicy: 'accept', minSpeedKmh: null, maxSpeedKmh: null, ...mode.s });
+      const settings = await loadDetectionSettings(pool, {
+        radiusM: cell.radius, latePointsPolicy: 'accept', minSpeedKmh: null, maxSpeedKmh: null,
+        segmentEvidenceEnabled: SEGMENTS, segmentMaxLengthM: 200, segmentMaxGapS: 90, ...mode.s,
+      });
       // eslint-disable-next-line no-await-in-loop
       await runDetection(pool, settings, { emit: false });
       // eslint-disable-next-line no-await-in-loop
@@ -200,7 +207,7 @@ try {
     console.log(`cell ${ci + 1}/${CELLS.length} done (${cell.interval}s / ${cell.jitter}m / r${cell.radius}${cell.stops ? ' / stops' : ''})`);
   }
 
-  console.log('\n== RESULTS (truly passed = setback ≤ radius; false = PIDs NOT truly passed)');
+  console.log(`\n== RESULTS — segment evidence ${SEGMENTS ? 'ON' : 'OFF'} (truly passed = setback ≤ radius; false = PIDs NOT truly passed)`);
   console.table(results);
   console.log('\nMARKDOWN');
   console.log('| Δt | jitter | radius | stops | mode | confirmed | candidate | missed | false-confirmed | false-any | segment-based detect | segment false |');

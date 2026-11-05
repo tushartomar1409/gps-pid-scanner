@@ -12,7 +12,10 @@
 1. **With point-based detection and normal 30–60 s GPS intervals, a truck that drives past without stopping is almost never CONFIRMED.** At 30 s and 15 km/h, consecutive points are about 125 m apart, while a 30 m circle around a house only covers about 57 m of the road. Result: **0 % confirmed, ~33 % candidate, ~67 % missed** (2 out of 3 houses get no GPS point within 30 m at all).
 2. **Precision is excellent:** "false-confirmed" is ≈ 0 % in every cell. When the engine says CONFIRMED, the vehicle really was within the radius.
 3. **Real collection behaviour helps a lot.** With the truck stopping 30 s every 60 m, the same 30 s / 10 m setting gives **31.8 % confirmed, 57.1 % candidate, 11.2 % missed**. Garbage trucks do stop, so the field trial will probably look more like this row than like the drive-by rows.
-4. **The biggest lever is the detection method, not the settings.** Checking the **line between consecutive GPS points** (segment-based) instead of only the points themselves would catch **~93 %** of truly passed houses at 30 s / 10 m. The trade-off is about 11 % false hits on houses further back. That is a code change; see §5.
+4. **The biggest lever is the detection method, not the settings.** Checking the **line between consecutive GPS points** catches houses the vehicle drove past between two fixes. This is now **implemented as `TRACK_SEGMENT` evidence and on by default** (§4b, §5).
+   - Measured at 30 s / 10 m: **missed falls from 66.9 % to 6.6 %**.
+   - Those houses become CANDIDATE ("Track passed nearby"), never CONFIRMED.
+   - The cost is ~10 % false CANDIDATE on houses 34–42 m back.
 5. The confirmation mode barely matters for drive-bys. `consecutive_points` and `min_events` give identical results here, and `dwell 20 s` confirms only stops.
 
 ## 2. What was simulated
@@ -97,15 +100,38 @@ The radius-50 rows show "n/a" for the false columns because every simulated hous
 4. Tune `radius_m` (30 → 40) and the interval. After each change, run `POST /api/detection/reprocess` for the trial days, so the same raw GPS is re-evaluated with the new settings.
 5. Look at `ambiguous` events (one point within radius of 2+ PIDs). They mark dense streets, where houses can't be told apart by GPS at all.
 
-## 5. Proposed improvement: segment-based proximity (needs approval)
+## 4b. Measured: with TRACK_SEGMENT evidence ON (implemented, default on)
+
+`DETECTION … npm run recall -- --segments` re-runs the 30 s rows with `detection.segment_evidence_enabled = true` (segment ≤ 200 m, gap ≤ 90 s). These are the **real engine** results, not estimates.
+
+| Δt | jitter | radius | stops | mode | confirmed | candidate | missed | false-confirmed | false-any |
+|---|---|---|---|---|---|---|---|---|---|
+| 30s | 5m | 30m | no | (all three) | 0% | **99.5%** | **0.5%** | 0% | 0.6% |
+| 30s | 10m | 30m | no | (all three) | 0% | **93.4%** | **6.6%** | 0% | 10.1% |
+| 30s | 20m | 30m | no | (all three) | 0% | **86.7%** | **13.3%** | 0% | 21% |
+| 30s | 10m | 50m | no | (all three) | 0% | 99.8% | 0.3% | n/a | n/a |
+| 30s | 10m | 30m | **yes** | (all three) | **29.9%** | 64.8% | **5.3%** | 0.1% | 10.8% |
+
+(The three confirmation modes give identical numbers here. The stops row uses freshly drawn random tracks, so it differs slightly from §3: 29.9 vs 31.8 % confirmed.)
+
+Compared with §3 at 30 s / 10 m: **missed 66.9 % → 6.6 %**.
+- **Confirmed is unchanged**, because segments never confirm by design.
+- **False-confirmed stays ≈ 0 %.**
+- The price is **"false-any" 2.5 % → 10.1 %**: houses 34–42 m back become CANDIDATE when the track line passes within 30 m of them. That's acceptable for a CANDIDATE label, which reads "Track passed nearby (between two GPS points)", but it is one more reason to keep **confirmed coverage** as the headline figure.
+- With jitter around 20 m the false-candidate rate doubles (21 %). If the field trial measures jitter that high, consider `detection.radius_m = 25` or turning segment evidence off for that provider.
+
+## 5. Segment-based proximity — implemented (Phase 5a, `0006_segment_evidence.sql`)
 
 Point-based detection only looks at where the GPS points are. It ignores where the vehicle obviously went **between** two points 125 m apart.
 
 A segment check (the distance from the PID to the line between two consecutive points of the same vehicle, ≤ radius and with a sane gap/speed) gives **92.7 % detected at 30 s / 10 m, versus 33.1 %**. The cost is ~11 % false hits on houses 34–42 m back, rising with jitter (20.6 % at 20 m).
 
-Proposal:
-- Add segment proximity as a **separate, weaker evidence type** (e.g. `TRACK_SEGMENT`). It would make a PID at most **CANDIDATE**, never CONFIRMED by itself.
-- Gate it on a maximum segment length and time gap (e.g. ≤ 200 m and ≤ 90 s), so GPS gaps and teleports don't create evidence.
-- Keep CONFIRMED for point evidence (stops / slow passes). This keeps precision honest while cutting "missed" from ~67 % to ~7 %.
-
-It fits the current set-based design: one extra CTE using `LAG` per vehicle and a segment-to-point distance in SQL.
+How it works, as built:
+- **Evidence type `TRACK_SEGMENT`:** shown as "Track passed nearby (between two GPS points)". It raises a PID to at most **CANDIDATE**. It **never** confirms, and never counts towards consecutive_points / min_events / dwell.
+- **Which segments count:** two strictly adjacent GPS points of the same vehicle and assignment, both valid (neither speed- nor stale-rejected).
+  - Gap ≤ `detection.segment_max_gap_s` (90) and length ≤ `detection.segment_max_length_m` (200).
+  - It also works when the earlier point arrives late, because each new point is also paired with its next point.
+- **Distance:** from the PID to the segment, `seg_dist_m()`: a local equirectangular projection around the first point (same sphere as `haversine_m`), then planar point-to-segment distance. The SQL and JS twins agree to < 0.01 m, and the error is negligible at ≤ 200 m.
+- **Only the segment interior counts.** If a PID is within radius of either endpoint, point evidence covers it already.
+- **Stored on the event:** `distance_meters` = the perpendicular distance; `gps_location_id` = the **later** point.
+- **Switch:** `detection.segment_evidence_enabled` (default `true`). Editable via `PUT /api/settings/…`; use reprocess to re-apply it to past days.

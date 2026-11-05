@@ -303,6 +303,91 @@ describe('detection scenarios', () => {
   });
 });
 
+describe('TRACK_SEGMENT evidence', () => {
+  // Street runs east-west through ORIGIN; the PID is 15 m north of it at x = 0.
+  const pid = () => at(15, 0);
+  const drive = (d, xs, stepS = 30, from = '09:00:00') =>
+    xs.map((x, i) => ({ p: at(0, x), t: new Date(ist(d, from).getTime() + i * stepS * 1000) }));
+
+  it('a drive-by with points 125 m apart past a PID 15 m off the street -> CANDIDATE via TRACK_SEGMENT', async () => {
+    const d = futureDay();
+    const { raId, pidIds, vehicle } = await makeAssignment({ pids: [pid()], date: d });
+    const ids = await track(vehicle.id, drive(d, [-60, 65]));
+    await detect();
+    const ev = await events(raId);
+    expect(ev).toHaveLength(1);
+    expect(ev[0]).toMatchObject({ evidence_status: 'TRACK_SEGMENT', gps_location_id: ids[1], pids_in_radius: 1 });
+    expect(ev[0].distance_meters).toBeCloseTo(15, 0);
+    expect((await statuses(raId))[pidIds[0]]).toMatchObject({ visit_status: 'GPS_VISIT_CANDIDATE', detection_count: 1 });
+  });
+
+  it('never confirms on its own — not even with consecutive_points N = 1 or many segments', async () => {
+    const d = futureDay();
+    const { raId, pidIds, vehicle } = await makeAssignment({ pids: [pid()], date: d });
+    await track(vehicle.id, drive(d, [-60, 65]));
+    await track(vehicle.id, drive(d, [65, -60], 30, '10:00:00')); // second pass, opposite direction
+    await detect({ consecutivePoints: 1 });
+    await detect({ confirmationMode: 'min_events', consecutivePoints: 1 });
+    expect((await events(raId)).every((e) => e.evidence_status === 'TRACK_SEGMENT')).toBe(true);
+    expect((await statuses(raId))[pidIds[0]].visit_status).toBe('GPS_VISIT_CANDIDATE');
+  });
+
+  it('no segment event when the gap is over 90 s, the segment over 200 m, a neighbour is rejected, or the setting is off', async () => {
+    const cases = [
+      { pts: (d) => drive(d, [-60, 65], 120), settings: {} }, // gap 120 s
+      { pts: (d) => drive(d, [-120, 130], 30), settings: {} }, // 250 m long
+      { pts: (d) => drive(d, [-60, 65], 30).map((p, i) => (i === 0 ? { ...p, speed: 90 } : p)), settings: { maxSpeedKmh: 60 } }, // earlier point rejected
+      { pts: (d) => drive(d, [-60, 65], 30), settings: { segmentEvidenceEnabled: false } },
+    ];
+    for (const c of cases) {
+      const d = futureDay();
+      // eslint-disable-next-line no-await-in-loop
+      const { raId, pidIds, vehicle } = await makeAssignment({ pids: [pid()], date: d });
+      await track(vehicle.id, c.pts(d)); // eslint-disable-line no-await-in-loop
+      await detect(c.settings); // eslint-disable-line no-await-in-loop
+      expect((await events(raId)).filter((e) => e.evidence_status === 'TRACK_SEGMENT')).toHaveLength(0); // eslint-disable-line no-await-in-loop
+      expect((await statuses(raId))[pidIds[0]].visit_status).toBe('NOT_VISITED'); // eslint-disable-line no-await-in-loop
+    }
+  });
+
+  it('a late EARLIER point still forms the segment (looked up as the next point) — event on the later point', async () => {
+    const d = futureDay();
+    const { raId, pidIds, vehicle } = await makeAssignment({ pids: [pid()], date: d });
+    const [later] = await track(vehicle.id, [{ p: at(0, 65), t: ist(d, '09:00:30') }]);
+    await detect();
+    expect((await statuses(raId))[pidIds[0]].visit_status).toBe('NOT_VISITED');
+    await track(vehicle.id, [{ p: at(0, -60), t: ist(d, '09:00:00'), delayS: 120 }]);
+    await detect({ latePointsPolicy: 'accept' });
+    const ev = await events(raId);
+    expect(ev).toEqual([expect.objectContaining({ evidence_status: 'TRACK_SEGMENT', gps_location_id: later })]);
+    expect((await statuses(raId))[pidIds[0]].visit_status).toBe('GPS_VISIT_CANDIDATE');
+  });
+
+  it('point evidence still confirms next to segment evidence; best event prefers the point fix', async () => {
+    const d = futureDay();
+    const { raId, pidIds, vehicle } = await makeAssignment({ pids: [pid()], date: d });
+    await track(vehicle.id, [...drive(d, [-60, 65]), { p: at(10, 0), t: ist(d, '09:05:00') }, { p: at(12, 2), t: ist(d, '09:05:20') }]);
+    await detect();
+    const s = (await statuses(raId))[pidIds[0]];
+    expect(s.visit_status).toBe('GPS_VISIT_CONFIRMED');
+    const best = (await pool.query('SELECT evidence_status FROM pid_visit_events WHERE id = $1', [s.best_event_id])).rows[0];
+    expect(best.evidence_status).toBe('PROXIMITY_POINT');
+  });
+
+  it('reprocess re-applies the rule: off -> NOT_VISITED, reprocess with it on -> CANDIDATE', async () => {
+    const d = futureDay();
+    const { raId, pidIds, vehicle } = await makeAssignment({ pids: [pid()], date: d });
+    await track(vehicle.id, drive(d, [-60, 65]));
+    await detect({ segmentEvidenceEnabled: false });
+    expect((await statuses(raId))[pidIds[0]].visit_status).toBe('NOT_VISITED');
+    const admin = await createUser('SUPER_ADMIN');
+    const settings = await loadDetectionSettings(pool, { ...BASE, segmentEvidenceEnabled: true });
+    await reprocess({ route_assignment_id: raId }, settings, { user: admin.user, scope: { unrestricted: true } }, pool);
+    await detect({ segmentEvidenceEnabled: true });
+    expect((await statuses(raId))[pidIds[0]].visit_status).toBe('GPS_VISIT_CANDIDATE');
+  });
+});
+
 describe('round trips per detection batch', () => {
   it('a batch costs ≤ 5 round trips (BEGIN, claim+detect, recompute, COMMIT = 4)', async () => {
     const d = futureDay();

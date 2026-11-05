@@ -12,6 +12,16 @@ const joinRa = (on) => `JOIN route_assignments ra ON ${on}
   JOIN routes r   ON r.id = ra.route_id
   JOIN vehicles v ON v.id = ra.vehicle_id`;
 
+/** Human wording for evidence types (GUIDE #8: a segment is never presented as a point fix). */
+export const EVIDENCE_LABELS = {
+  PROXIMITY_POINT: 'GPS point within detection radius',
+  TRACK_SEGMENT: 'Track passed nearby (between two GPS points)',
+  REJECTED_SPEED: 'GPS point within radius, rejected (speed outside limits)',
+  REJECTED_STALE: 'GPS point within radius, rejected (data too old when received)',
+  CONSECUTIVE_CONFIRMED: 'Consecutive GPS points within radius',
+};
+const evidenceLabelSql = (col) => `CASE ${col} ${Object.entries(EVIDENCE_LABELS).map(([k, v]) => `WHEN '${k}' THEN '${v}'`).join(' ')} END`;
+
 export const MISSED_REASONS = {
   NOT_VISITED: 'No qualifying GPS point within the detection radius',
   GPS_VISIT_CANDIDATE: 'GPS proximity detected but confirmation conditions not met',
@@ -37,7 +47,8 @@ export function listVisitEvents(q, scope, db = defaultDb) {
   if (q.ambiguous !== undefined) where.add('e.ambiguous = ?', q.ambiguous);
   return page(db,
     `e.id, e.route_assignment_id, e.pid_id, p.pid_number, e.vehicle_id, v.vehicle_number, r.route_code,
-     e.gps_location_id, e.distance_meters, e.speed_at_detection, e.detected_at, e.evidence_status, e.ambiguous, e.pids_in_radius`,
+     e.gps_location_id, e.distance_meters, e.speed_at_detection, e.detected_at, e.evidence_status,
+     ${evidenceLabelSql('e.evidence_status')} AS evidence_label, e.ambiguous, e.pids_in_radius`,
     `pid_visit_events e ${joinRa('ra.id = e.route_assignment_id')} JOIN pids p ON p.id = e.pid_id`,
     where, 'e.detected_at, e.id', q);
 }
@@ -111,7 +122,8 @@ export async function pidHistory(pidId, { from, to }, scope, db = defaultDb) {
     `SELECT ra.operational_date::text AS operational_date, s.route_assignment_id, r.route_code, v.vehicle_number, s.visit_status,
             s.first_visit_at, s.last_visit_at, s.detection_count, s.min_distance_meters, s.ambiguous,
             COALESCE((SELECT json_agg(json_build_object('id', e.id, 'detected_at', e.detected_at, 'distance_meters', e.distance_meters,
-                                                        'evidence_status', e.evidence_status, 'ambiguous', e.ambiguous) ORDER BY e.detected_at)
+                                                        'evidence_status', e.evidence_status, 'evidence_label', ${evidenceLabelSql('e.evidence_status')},
+                                                        'ambiguous', e.ambiguous) ORDER BY e.detected_at)
                         FROM pid_visit_events e WHERE e.route_assignment_id = s.route_assignment_id AND e.pid_id = s.pid_id), '[]') AS events
        FROM pid_daily_status s
        ${joinRa('ra.id = s.route_assignment_id')}
