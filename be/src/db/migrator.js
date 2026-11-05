@@ -20,6 +20,7 @@ export async function runMigrations(pool, { dir = MIGRATIONS_DIR, log = () => {}
     const applied = new Set(rows.map((r) => r.version));
     const files = (await fs.readdir(dir)).filter((f) => /^\d{4}_.+\.sql$/.test(f)).sort();
     const ran = [];
+    /* eslint-disable no-await-in-loop -- migrations must apply strictly in order */
     for (const file of files) {
       if (applied.has(file)) {
         log(`skip   ${file} (already applied)`);
@@ -39,6 +40,7 @@ export async function runMigrations(pool, { dir = MIGRATIONS_DIR, log = () => {}
       ran.push(file);
       log(`apply  ${file}`);
     }
+    /* eslint-enable no-await-in-loop */
     return ran;
   } finally {
     if (locked) await client.query("SELECT pg_advisory_unlock(hashtext('schema_migrations'))").catch(() => {});

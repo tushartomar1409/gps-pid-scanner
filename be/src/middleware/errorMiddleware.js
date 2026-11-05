@@ -32,7 +32,6 @@ export function notFoundHandler(req, res) {
   sendError(res, { status: 404, message: `Route not found: ${req.method} ${req.originalUrl}` });
 }
 
-// eslint-disable-next-line no-unused-vars
 export function errorHandler(err, req, res, _next) {
   if (err instanceof AppError) {
     return sendError(res, { status: err.status, message: err.message, errors: err.errors });

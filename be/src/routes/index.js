@@ -5,6 +5,7 @@ import { createAuthRoutes } from './authRoutes.js';
 import {
   createZoneRoutes, createWardRoutes, createAgencyRoutes, createVehicleRoutes, createUserRoutes,
 } from './masterRoutes.js';
+import { createRoleRoutes, createLookupRoutes } from './referenceRoutes.js';
 import { sendSuccess } from '../utils/responseHandler.js';
 
 export function createApiRouter() {
@@ -21,6 +22,8 @@ export function createApiRouter() {
   api.use('/agencies', ...guard, createAgencyRoutes());
   api.use('/vehicles', ...guard, createVehicleRoutes());
   api.use('/users', ...guard, createUserRoutes());
+  api.use('/roles', ...guard, createRoleRoutes());
+  api.use('/lookups', ...guard, createLookupRoutes());
 
   return api;
 }
