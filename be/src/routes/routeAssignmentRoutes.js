@@ -7,6 +7,7 @@ import { routeAssignmentSchemas as s } from '../validators/routeAssignmentValida
 import { routeAssignmentService as svc } from '../services/routeAssignmentService.js';
 import { requestContext } from '../controllers/crudController.js';
 import { sendSuccess } from '../utils/responseHandler.js';
+import { compareAssignment } from '../services/routeComparisonService.js';
 
 export function createRouteAssignmentRoutes() {
   const read = requirePermission('assignments:read');
@@ -28,6 +29,9 @@ export function createRouteAssignmentRoutes() {
   router.get('/:id', read, validate({ params: idParam, query: s.get }), async (req, res) => {
     const data = await svc.get(req.valid.params.id, req.valid.query, req.scope);
     sendSuccess(res, { message: 'Route assignment fetched successfully', data });
+  });
+  router.get('/:id/comparison', read, validate({ params: idParam }), async (req, res) => {
+    sendSuccess(res, { message: 'Route comparison', data: await compareAssignment(req.valid.params.id, req.scope) });
   });
   router.patch('/:id/cancel', write, validate({ params: idParam }), async (req, res) => {
     const data = await svc.cancel(req.valid.params.id, requestContext(req));

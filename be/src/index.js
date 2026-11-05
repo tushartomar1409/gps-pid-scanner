@@ -6,9 +6,11 @@ import { pool, closePool } from './config/database.js';
 import { logger } from './utils/logger.js';
 import { getProvider, startGpsPolling, stopGpsPolling } from './services/gps/gpsRuntime.js';
 import { PidVisitWorker } from './jobs/pidVisitProcessingJob.js';
+import { attachRealtime } from './realtime/socketServer.js';
 
 const app = createApp();
 const server = http.createServer(app);
+const realtime = attachRealtime(server); // Socket.IO on /socket.io (not in app.js: tests build the app alone)
 
 async function start() {
   await pool.query('SELECT 1'); // fail fast if the DB is unreachable
@@ -31,6 +33,7 @@ async function shutdown(signal) {
   setTimeout(() => process.exit(1), 15_000).unref();
   await stopGpsPolling().catch((err) => logger.warn({ err: err.message }, 'GPS poller stop failed')); // waits ≤ 10 s
   await detectionWorker?.stop().catch((err) => logger.warn({ err: err.message }, 'Detection worker stop failed'));
+  await realtime.close().catch(() => {});
   server.close(async () => {
     await closePool().catch(() => {});
     process.exit(0);

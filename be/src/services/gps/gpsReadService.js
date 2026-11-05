@@ -14,7 +14,10 @@ const VEHICLE_SCOPE = { zone: 'v.zone_id', ward: 'v.ward_id', agency: 'v.agency_
 export const offlineAfterSeconds = async () => Number(await getSetting('gps.offline_after_seconds', 300)) || 300;
 
 /** SQL + params for the live view (exported for EXPLAIN in perf). */
-export function buildLiveQuery(filters, scope, { offlineS, today, limit = LIVE_CAP }) {
+/** Marker fields only — what the live map needs (GUIDE #8 B). Details come from the per-vehicle endpoint. */
+const MAP_COLUMNS = 'q.vehicle_id, q.vehicle_number, q.vehicle_type, q.latitude, q.longitude, q.speed, q.recorded_at, q.connection_status, q.route_code';
+
+export function buildLiveQuery(filters, scope, { offlineS, today, limit = LIVE_CAP, view = 'full' }) {
   const where = applyScope(new SqlWhere(), scope, VEHICLE_SCOPE);
   where.eq('v.zone_id', filters.zone_id);
   where.eq('v.ward_id', filters.ward_id);
@@ -33,7 +36,7 @@ export function buildLiveQuery(filters, scope, { offlineS, today, limit = LIVE_C
   if (filters.connection_status) outer.add('q.connection_status = ?', filters.connection_status);
   const limP = where.param(limit + 1);
   return {
-    text: `SELECT * FROM (
+    text: `SELECT ${view === 'map' ? MAP_COLUMNS : 'q.*'} FROM (
       SELECT v.id AS vehicle_id, v.vehicle_number, v.vehicle_type, v.gps_device_id, v.status AS vehicle_status,
              v.agency_id, a.agency_name, v.zone_id, v.ward_id,
              l.latitude, l.longitude, l.speed, l.ignition, l.recorded_at, l.received_at, l.provider_status,
@@ -57,7 +60,7 @@ export function buildLiveQuery(filters, scope, { offlineS, today, limit = LIVE_C
 }
 
 export async function liveVehicles(filters, scope, executor = defaultDb) {
-  const q = buildLiveQuery(filters, scope, { offlineS: await offlineAfterSeconds(), today: todayInTz(env.APP_TIMEZONE) });
+  const q = buildLiveQuery(filters, scope, { offlineS: await offlineAfterSeconds(), today: todayInTz(env.APP_TIMEZONE), view: filters.view });
   const { rows } = await executor.query(q.text, q.values);
   const truncated = rows.length > LIVE_CAP;
   return { vehicles: truncated ? rows.slice(0, LIVE_CAP) : rows, truncated };
@@ -98,6 +101,34 @@ export async function vehicleHistory({ vehicle_id: vehicleId, from, to, max_poin
     total_in_window: total,
     downsampled: total > maxPoints,
     points: rows.map(({ total: _t, ...p }) => p),
+  };
+}
+
+/**
+ * Side panel for one vehicle (flow.txt §10): live row + today's work, in 2 queries.
+ * covered = GPS confirmed (official, flow §12); candidate reported separately; remaining = assigned − confirmed.
+ */
+export async function liveVehicleDetail(vehicleId, scope, executor = defaultDb) {
+  const live = await latestLocation(vehicleId, scope, executor);
+  const today = todayInTz(env.APP_TIMEZONE);
+  const { rows: [t] } = await executor.query(
+    `WITH ra AS (
+       SELECT x.id, r.route_code, r.route_name FROM route_assignments x JOIN routes r ON r.id = x.route_id
+        WHERE x.vehicle_id = $1 AND x.operational_date = $2::date AND x.status <> 'CANCELLED')
+     SELECT COALESCE((SELECT json_agg(json_build_object('route_assignment_id', id, 'route_code', route_code, 'route_name', route_name)) FROM ra), '[]') AS assignments,
+            (SELECT count(*) FROM pid_daily_status s WHERE s.route_assignment_id IN (SELECT id FROM ra))::int AS assigned,
+            (SELECT count(*) FROM pid_daily_status s WHERE s.route_assignment_id IN (SELECT id FROM ra) AND s.visit_status = 'GPS_VISIT_CONFIRMED')::int AS confirmed,
+            (SELECT count(*) FROM pid_daily_status s WHERE s.route_assignment_id IN (SELECT id FROM ra) AND s.visit_status = 'GPS_VISIT_CANDIDATE')::int AS candidate,
+            (SELECT count(*) FROM pid_visit_events e WHERE e.route_assignment_id IN (SELECT id FROM ra)
+                AND e.evidence_status IN ('PROXIMITY_POINT', 'TRACK_SEGMENT'))::int AS visit_events_today`,
+    [vehicleId, today]);
+  return {
+    ...live,
+    today: {
+      date: today, assignments: t.assignments,
+      assigned_pids: t.assigned, covered_pids: t.confirmed, candidate_pids: t.candidate,
+      remaining_pids: t.assigned - t.confirmed, gps_visit_events: t.visit_events_today,
+    },
   };
 }
 

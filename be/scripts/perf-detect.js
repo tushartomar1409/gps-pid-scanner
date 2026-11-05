@@ -114,6 +114,20 @@ try {
   } finally {
     client.release();
   }
+
+  // ---- Dashboard EXPLAINs on the same dataset (GUIDE #8 C)
+  const { buildSummaryQuery, buildGroupedQuery } = await import('../src/services/dashboardService.js');
+  for (const [label, q] of [
+    ['summary', buildSummaryQuery({ date: today }, { unrestricted: true })],
+    ['vehicle-performance', buildGroupedQuery('vehicle', { date: today }, { unrestricted: true })],
+  ]) {
+    t0 = performance.now();
+    const n = (await pool.query(q.text, q.values)).rows.length; // eslint-disable-line no-await-in-loop
+    const wall = ms(t0);
+    const { rows: plan } = await pool.query(`EXPLAIN (ANALYZE, BUFFERS) ${q.text}`, q.values); // eslint-disable-line no-await-in-loop
+    console.log(`\n== EXPLAIN dashboard ${label}: ${n} rows, wall ${wall} ms (1 statement, incl. 1 RTT)`);
+    console.log(plan.map((r) => r['QUERY PLAN']).join('\n'));
+  }
 } catch (err) {
   console.error('PERF RUN FAILED:', err);
   process.exitCode = 1;

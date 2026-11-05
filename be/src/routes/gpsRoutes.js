@@ -5,7 +5,7 @@ import { rateLimit } from 'express-rate-limit';
 import { requirePermission, requireRole } from '../middleware/roleMiddleware.js';
 import { validate } from '../middleware/validationMiddleware.js';
 import { idParam, queryId } from '../validators/common.js';
-import { liveVehicles, vehicleHistory, latestLocation, providerStatus } from '../services/gps/gpsReadService.js';
+import { liveVehicles, liveVehicleDetail, vehicleHistory, latestLocation, providerStatus } from '../services/gps/gpsReadService.js';
 import { getProvider, pollNow } from '../services/gps/gpsRuntime.js';
 import { env } from '../config/env.js';
 import { sendSuccess, sendError } from '../utils/responseHandler.js';
@@ -17,6 +17,7 @@ const liveQuery = z.object({
   zone_id: queryId, ward_id: queryId, agency_id: queryId, vehicle_id: queryId, route_id: queryId,
   vehicle_type: z.string().trim().max(50).optional(),
   connection_status: z.enum(CONNECTION).optional(),
+  view: z.enum(['full', 'map']).default('full'),
 });
 const historyWindow = {
   from: isoWithOffset,
@@ -42,6 +43,9 @@ export function createGpsRoutes() {
   router.get('/live-vehicles', read, validate({ query: liveQuery }), async (req, res) => {
     const data = await liveVehicles(req.valid.query, req.scope);
     sendSuccess(res, { message: 'Live vehicles fetched successfully', data });
+  });
+  router.get('/live-vehicles/:vehicleId', read, validate({ params: z.object({ vehicleId: z.coerce.number().int().positive() }) }), async (req, res) => {
+    sendSuccess(res, { message: 'Vehicle details fetched successfully', data: await liveVehicleDetail(req.valid.params.vehicleId, req.scope) });
   });
   router.get('/vehicle-history', read, validate({ query: historyQuery }), async (req, res) => {
     sendSuccess(res, { message: 'Vehicle history fetched successfully', data: await vehicleHistory(req.valid.query, req.scope) });

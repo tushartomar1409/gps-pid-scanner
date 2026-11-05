@@ -145,6 +145,7 @@ export async function pollOnce({ db, provider, deviceCache, trigger = 'SCHEDULED
     await finishRun(db, summary).catch(() => {}); // even recording can fail (DB down) — never throw from here
   }
   summary.durationMs = Date.now() - t0;
+  gpsEvents.emit('poll', { provider: provider.name, outcome: summary.outcome, pollRunId: summary.pollRunId }); // realtime provider:status
   return summary;
 }
 
