@@ -8,6 +8,7 @@ import { Input } from '../../components/Input.jsx';
 import { Select } from '../../components/Select.jsx';
 import { Spinner } from '../../components/Spinner.jsx';
 import { ErrorState } from '../../components/ErrorState.jsx';
+import { UnsavedChangesDialog } from '../../components/UnsavedChangesDialog.jsx';
 import { useToast } from '../../components/Toast.jsx';
 import { BaseMap } from '../../components/map/BaseMap.jsx';
 import { BoxSelect, FitToPoints, MapClick } from '../../components/map/MapHelpers.jsx';
@@ -151,7 +152,7 @@ export default function RouteBuilderPage() {
 
   const current = JSON.stringify({ f: form, st: start, en: end, ln: line, ids: [...selected].sort() });
   const dirty = baseline !== null && current !== baseline;
-  useUnsavedChangesPrompt(dirty && canWrite);
+  const { blocker, allowNextNavigation } = useUnsavedChangesPrompt(dirty && canWrite);
 
   const setField = (k, v) => {
     setErrors((e) => ({ ...e, [k]: undefined }));
@@ -215,6 +216,7 @@ export default function RouteBuilderPage() {
       // Keep this component instance (and the selection) — don't reload from the server.
       loadedFor.current = res.routeId;
       setRouteId(res.routeId);
+      allowNextNavigation(); // our own /routes/new -> /routes/:id redirect must not trigger the guard
       navigate(`/routes/${res.routeId}`, { replace: true });
     }
     const f = { ...form, route_code: res.route.route_code };
@@ -360,6 +362,7 @@ export default function RouteBuilderPage() {
         )}
         {selectedList.length > 400 && <p className="mt-2 text-xs text-slate-500">Showing 400 of {selectedList.length}; use search to find others.</p>}
       </section>
+      <UnsavedChangesDialog blocker={blocker} />
     </div>
   );
 }

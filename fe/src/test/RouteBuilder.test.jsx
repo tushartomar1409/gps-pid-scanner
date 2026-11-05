@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { createMemoryRouter, RouterProvider, Link } from 'react-router-dom';
 import { ToastProvider } from '../components/Toast.jsx';
 import RouteBuilderPage from '../pages/routes/RouteBuilderPage.jsx';
 import { planAssignCall, saveRouteAndPids, toggleId, addPointsWhere, buildRoutePayload } from '../pages/routes/routeBuilderLogic.js';
@@ -28,14 +28,21 @@ const points = [
   { id: 12, pid_number: 'P12', latitude: 28.42, longitude: 77.32, coord_status: 'IMPORTED' },
 ];
 
+// useBlocker needs a data router, exactly like the app (createBrowserRouter).
 function renderNew() {
-  return render(
-    <MemoryRouter initialEntries={['/routes/new']}>
-      <ToastProvider>
-        <Routes><Route path="/routes/:id" element={<RouteBuilderPage />} /></Routes>
-      </ToastProvider>
-    </MemoryRouter>,
+  const router = createMemoryRouter(
+    [
+      { path: '/routes/:id', element: <><Link to="/elsewhere">Go elsewhere</Link><RouteBuilderPage /></> },
+      { path: '/elsewhere', element: <p>ELSEWHERE PAGE</p> },
+    ],
+    { initialEntries: ['/elsewhere', '/routes/new'], initialIndex: 1 },
   );
+  render(
+    <ToastProvider>
+      <RouterProvider router={router} />
+    </ToastProvider>,
+  );
+  return router;
 }
 
 async function fillAndPick() {
@@ -112,6 +119,31 @@ describe('RouteBuilderPage', () => {
     expect(routesApi.update).toHaveBeenCalledWith(42, expect.any(Object)); // second save updates the created route
     expect(routesApi.assignPids).toHaveBeenLastCalledWith(42, { mode: 'replace', pid_ids: [12] });
     expect(routesApi.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('blocks navigation with unsaved changes (stay / leave) and lets its own post-create redirect through', async () => {
+    routesApi.assignPids.mockResolvedValue({ data: { added: 1, removed: 0, total: 1 } });
+    const router = renderNew();
+    await fillAndPick(); // now dirty
+
+    await userEvent.click(screen.getByRole('link', { name: 'Go elsewhere' }));
+    expect(screen.getByRole('dialog', { name: 'Leave without saving?' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByText('ELSEWHERE PAGE')).not.toBeInTheDocument();
+    expect(router.state.location.pathname).toBe('/routes/new');
+
+    // Saving redirects /routes/new -> /routes/42 without showing the dialog.
+    await userEvent.click(screen.getByRole('button', { name: 'Create route' }));
+    await screen.findByText(/Route PIDs: 1 selected/);
+    expect(router.state.location.pathname).toBe('/routes/42');
+    expect(screen.queryByRole('dialog', { name: 'Leave without saving?' })).not.toBeInTheDocument();
+
+    // Browser Back after a new edit is blocked too; "Leave page" proceeds.
+    await userEvent.click(screen.getByRole('button', { name: 'pin P11' })); // dirty again
+    await act(async () => { router.navigate(-1); });
+    expect(screen.getByRole('dialog', { name: 'Leave without saving?' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Leave page' }));
+    expect(await screen.findByText('ELSEWHERE PAGE')).toBeInTheDocument();
   });
 
   it('validates required fields before calling the API', async () => {
