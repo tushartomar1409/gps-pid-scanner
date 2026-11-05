@@ -2,7 +2,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { MemoryRouter, Route, Routes } from 'react-router';
 import ReportPage from '../pages/reports/ReportPage.jsx';
 import { exportErrorMessage, toApiParams } from '../pages/reports/reportConfig.js';
 import { reportsApi } from '../api/resources.js';

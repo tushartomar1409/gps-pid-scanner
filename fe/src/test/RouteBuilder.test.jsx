@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, act } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { createMemoryRouter, RouterProvider, Link } from 'react-router-dom';
+import { createMemoryRouter, RouterProvider, Link } from 'react-router';
 import { ToastProvider } from '../components/Toast.jsx';
 import RouteBuilderPage from '../pages/routes/RouteBuilderPage.jsx';
 import { planAssignCall, saveRouteAndPids, toggleId, addPointsWhere, buildRoutePayload } from '../pages/routes/routeBuilderLogic.js';

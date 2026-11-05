@@ -1,6 +1,6 @@
 // Shared filter bar for the monitoring pages, synced to the URL (?date=&zone_id=&ward_id=&agency_id=&vehicle_id=...).
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router';
 import { referenceApi } from '../api/resources.js';
 import { usePermission } from '../auth/usePermission.js';
 import { toOptions } from '../hooks/useLookups.js';

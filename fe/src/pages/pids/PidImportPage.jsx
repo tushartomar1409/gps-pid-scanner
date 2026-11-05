@@ -1,6 +1,6 @@
 // 3-step PID import: Upload -> Validate (dry run) -> Commit (GUIDE #5 B). The File stays in state.
 import { useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { Button } from '../../components/Button.jsx';
 import { ConfirmDialog } from '../../components/ConfirmDialog.jsx';
 import { DataTable } from '../../components/DataTable.jsx';

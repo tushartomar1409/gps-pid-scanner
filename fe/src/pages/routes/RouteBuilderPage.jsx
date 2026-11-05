@@ -1,7 +1,7 @@
 // Two-panel route builder (GUIDE #5 C): form + start/end on the left, ward PID map on the right,
 // selected PID list below. Click a PID to toggle, Shift+drag to box-select, draw an optional line.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router';
 import { CircleMarker, Polyline, Tooltip } from 'react-leaflet';
 import { Button } from '../../components/Button.jsx';
 import { Input } from '../../components/Input.jsx';

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router';
 import { AuthProvider } from '../auth/AuthContext.jsx';
 import { ProtectedRoute } from '../auth/ProtectedRoute.jsx';
 import { authApi } from '../api/auth.js';

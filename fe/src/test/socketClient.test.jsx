@@ -1,7 +1,7 @@
 // GUIDE #9 G2: socket client — unauthorized -> logout redirect; status hook transitions; resync only on RE-connect.
 import { describe, it, expect, vi } from 'vitest';
 import { act, render, renderHook, screen, waitFor } from '@testing-library/react';
-import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router';
 import { createSocketClient } from '../realtime/socketClient.js';
 import { useSocketStatus } from '../realtime/hooks.js';
 import { LiveIndicator } from '../components/LiveIndicator.jsx';

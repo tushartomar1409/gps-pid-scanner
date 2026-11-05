@@ -1,6 +1,6 @@
 // Shared list/create/edit/deactivate screen for master resources.
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router';
 import { DataTable } from '../../components/DataTable.jsx';
 import { Button } from '../../components/Button.jsx';
 import { Input } from '../../components/Input.jsx';

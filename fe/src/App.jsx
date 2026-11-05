@@ -2,7 +2,7 @@
 // (unsaved-changes guard that also catches browser Back/Forward).
 // Every page is a lazy chunk (GUIDE #9 A1): the initial bundle is only the shell + login.
 import { lazy, Suspense } from 'react';
-import { Outlet } from 'react-router-dom';
+import { Outlet } from 'react-router';
 import { AuthProvider } from './auth/AuthContext.jsx';
 import { SettingsProvider } from './settings/SettingsContext.jsx';
 import { ProtectedRoute } from './auth/ProtectedRoute.jsx';
@@ -84,11 +84,3 @@ export const routes = [
     ],
   },
 ];
-
-export const ROUTER_FUTURE = {
-  v7_relativeSplatPath: true,
-  v7_fetcherPersist: true,
-  v7_normalizeFormMethod: true,
-  v7_partialHydration: true,
-  v7_skipActionErrorRevalidation: true,
-};

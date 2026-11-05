@@ -1,7 +1,7 @@
 // GUIDE #9 G5: dashboard renders cards from the API; headline = GPS confirmed %; disclaimer; pid:status refetch debounced.
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { act, render, screen, waitFor } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter } from 'react-router';
 import DashboardPage from '../pages/dashboard/DashboardPage.jsx';
 import { dashboardApi } from '../api/resources.js';
 import { socketClient } from '../realtime/socketClient.js';

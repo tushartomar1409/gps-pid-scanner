@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { MasterListPage, STATUS_OPTIONS } from '../masters/MasterListPage.jsx';
 import { ZoneWardSelects } from '../masters/ZoneWardSelects.jsx';
 import { Input } from '../../components/Input.jsx';

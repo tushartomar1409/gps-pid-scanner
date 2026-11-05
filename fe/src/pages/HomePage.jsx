@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { useAuth } from '../auth/AuthContext.jsx';
 import { visibleSections } from '../layouts/Sidebar.jsx';
 import { scopeLabel } from '../utils/format.js';

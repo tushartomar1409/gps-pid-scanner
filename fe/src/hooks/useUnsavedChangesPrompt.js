@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef } from 'react';
-import { useBlocker } from 'react-router-dom';
+import { useBlocker } from 'react-router';
 
 /**
  * Guards unsaved changes:

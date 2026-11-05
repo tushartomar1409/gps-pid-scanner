@@ -1,4 +1,4 @@
-import { NavLink } from 'react-router-dom';
+import { NavLink } from 'react-router';
 import { hasPermission } from '../auth/usePermission.js';
 import { NAV_SECTIONS } from './navConfig.js';
 

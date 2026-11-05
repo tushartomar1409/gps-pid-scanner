@@ -1,7 +1,7 @@
 // Side panel for one vehicle (flow §10), from GET /gps/live-vehicles/:id. Counts refresh on a
 // pid:status that touches this vehicle's assignment.
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { gpsApi } from '../../api/resources.js';
 import { useApiQuery } from '../../hooks/useApiQuery.js';
 import { useSocketEvent } from '../../realtime/hooks.js';

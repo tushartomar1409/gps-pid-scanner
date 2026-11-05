@@ -1,6 +1,6 @@
 // Shared report page (GUIDE #10 D2): URL-synced filters, sortable paginated preview, exports.
 import { useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams } from 'react-router';
 import { reportsApi } from '../../api/resources.js';
 import { useApiQuery } from '../../hooks/useApiQuery.js';
 import { usePermission } from '../../auth/usePermission.js';

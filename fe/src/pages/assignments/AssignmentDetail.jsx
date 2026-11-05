@@ -10,7 +10,7 @@ import { assignmentsApi } from '../../api/resources.js';
 import { parseApiError } from '../../utils/apiErrors.js';
 import { formatShift, formatOpDate } from '../../utils/dates.js';
 import { CoverageBar } from './CoverageBar.jsx';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { Disclaimer } from '../../components/Disclaimer.jsx';
 import { VISIT_STATUS, VISIT_STATUS_ORDER } from '../../utils/visitStatus.js';
 import { usePermission } from '../../auth/usePermission.js';
