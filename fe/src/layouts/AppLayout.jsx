@@ -6,6 +6,7 @@ import { Button } from '../components/Button.jsx';
 import { scopeLabel } from '../utils/format.js';
 import { usePermission } from '../auth/usePermission.js';
 import { GpsStatusBadge } from '../components/GpsStatusBadge.jsx';
+import { LiveIndicator } from '../components/LiveIndicator.jsx';
 
 function Brand() {
   return (
@@ -13,7 +14,7 @@ function Brand() {
       <span className="flex h-8 w-8 items-center justify-center rounded-md bg-white/15 text-sm font-bold text-white">GP</span>
       <div className="leading-tight">
         <p className="text-sm font-semibold text-white">GPS PID Portal</p>
-        <p className="text-xs text-emerald-100/70">Collection Monitoring</p>
+        <p className="text-xs text-emerald-100/70">GPS Visit Monitoring</p>
       </div>
     </div>
   );
@@ -68,6 +69,7 @@ export function AppLayout() {
           </button>
           <div className="min-w-0 flex-1" />
           <div className="flex items-center gap-3">
+            <LiveIndicator />
             {can('gps:read') && <GpsStatusBadge />}
             <div className="min-w-0 text-right leading-tight">
               <p className="truncate text-sm font-semibold text-slate-900">{user?.name}</p>

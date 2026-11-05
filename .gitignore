@@ -10,7 +10,10 @@ be/dbconnection.txt
 # build output
 dist/
 build/
-coverage/
+# test coverage reports only (anchored: fe/src/pages/coverage/ is source code)
+/coverage/
+/be/coverage/
+/fe/coverage/
 
 # logs / OS
 *.log

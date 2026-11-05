@@ -2,10 +2,18 @@ import { NavLink } from 'react-router-dom';
 import { hasPermission } from '../auth/usePermission.js';
 import { NAV_SECTIONS } from './navConfig.js';
 
+/** item visible? permission, optional role, optional hideIf (hidden when the user HAS that permission). */
+export function itemVisible(user, i) {
+  if (!hasPermission(user, i.permission)) return false;
+  if (i.role && user?.role_key !== i.role) return false;
+  if (i.hideIf && hasPermission(user, i.hideIf)) return false;
+  return true;
+}
+
 /** Filters NAV_SECTIONS by the user's permissions; empty sections are dropped. */
 export function visibleSections(user, sections = NAV_SECTIONS) {
   return sections
-    .map((s) => ({ ...s, items: s.items.filter((i) => hasPermission(user, i.permission)) }))
+    .map((s) => ({ ...s, items: s.items.filter((i) => itemVisible(user, i)) }))
     .filter((s) => s.items.length > 0);
 }
 

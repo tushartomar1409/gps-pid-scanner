@@ -3,7 +3,7 @@ import { useAuth } from '../auth/AuthContext.jsx';
 import { visibleSections } from '../layouts/Sidebar.jsx';
 import { scopeLabel } from '../utils/format.js';
 
-// Intentionally no statistics: the real, DB-backed dashboard arrives in Phase 5.
+// Welcome page for users without dashboard:read (IndexPage shows the dashboard to everyone else).
 export default function HomePage() {
   const { user } = useAuth();
   const shortcuts = visibleSections(user).flatMap((s) => s.items).filter((i) => i.to !== '/');

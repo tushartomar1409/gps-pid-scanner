@@ -19,16 +19,35 @@ describe('Sidebar', () => {
     expect(screen.queryByText('Administration')).not.toBeInTheDocument(); // empty section dropped
   });
 
-  it('shows everything for the * permission', () => {
-    renderSidebar({ permissions: ['*'] });
+  it('shows everything for the * permission; SUPER_ADMIN also gets the role-only admin pages', () => {
+    renderSidebar({ permissions: ['*'], role_key: 'SUPER_ADMIN' });
     expect(screen.getAllByRole('link').map((a) => a.textContent)).toEqual([
-      'Home', 'PIDs', 'PID Import', 'Routes', 'Assignments', 'Zones', 'Wards', 'Agencies', 'Vehicles', 'Users',
+      'Dashboard', 'Live Tracking', 'Coverage Map', 'GPS History',
+      'PIDs', 'PID Import', 'Routes', 'Assignments', 'Zones', 'Wards', 'Agencies', 'Vehicles',
+      'Users', 'Detection Settings', 'GPS Integration', 'Activity Logs',
     ]);
+    expect(screen.queryByText('Home')).not.toBeInTheDocument(); // replaced by Dashboard
+  });
+
+  it('role-only items stay hidden for other roles even with every permission', () => {
+    renderSidebar({ permissions: ['*'], role_key: 'DEPARTMENT_ADMIN' });
+    const links = screen.getAllByRole('link').map((a) => a.textContent);
+    expect(links).toContain('GPS Integration');
+    expect(links).not.toContain('Detection Settings');
+    expect(links).not.toContain('Activity Logs');
+  });
+
+  it('monitoring section for a dashboard + GPS reader (agency-style permissions)', () => {
+    renderSidebar({ permissions: ['dashboard:read', 'gps:read', 'assignments:read'], role_key: 'AGENCY_USER' });
+    expect(screen.getAllByRole('link').map((a) => a.textContent)).toEqual([
+      'Dashboard', 'Live Tracking', 'Coverage Map', 'GPS History', 'Assignments', 'GPS Integration',
+    ]);
+    expect(screen.getByText('Monitoring')).toBeInTheDocument();
   });
 
   it('shows the Operations section for read-only roles without the write-only Import item', () => {
     renderSidebar({ permissions: ['pids:read', 'routes:read', 'assignments:read'] });
-    expect(screen.getAllByRole('link').map((a) => a.textContent)).toEqual(['Home', 'PIDs', 'Routes', 'Assignments']);
+    expect(screen.getAllByRole('link').map((a) => a.textContent)).toEqual(['Home', 'Coverage Map', 'PIDs', 'Routes', 'Assignments']);
     expect(screen.getByText('Operations')).toBeInTheDocument();
   });
 

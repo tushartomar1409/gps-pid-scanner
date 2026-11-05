@@ -3,11 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import { authApi } from '../api/auth.js';
 import { setUnauthorizedHandler } from '../api/client.js';
 import { clearToken, getToken, setToken } from './session.js';
+import { socketClient } from '../realtime/socketClient.js';
 
 const AuthContext = createContext(null);
 
 /** status: 'loading' (restoring session) | 'authenticated' | 'anonymous' */
-export function AuthProvider({ children }) {
+export function AuthProvider({ children, realtime = socketClient }) {
   const navigate = useNavigate();
   const [user, setUser] = useState(null);
   const [status, setStatus] = useState(() => (getToken() ? 'loading' : 'anonymous'));
@@ -43,6 +44,22 @@ export function AuthProvider({ children }) {
     });
     return () => setUnauthorizedHandler(null);
   }, [navigate]);
+
+  // Real-time socket lives exactly as long as the authenticated session (GUIDE #9 A2).
+  useEffect(() => {
+    if (status !== 'authenticated') return undefined;
+    realtime.setUnauthorizedHandler(() => {
+      clearToken();
+      setUser(null);
+      setStatus('anonymous');
+      navigate('/login?expired=1', { replace: true });
+    });
+    realtime.connect(getToken());
+    return () => {
+      realtime.setUnauthorizedHandler(null);
+      realtime.disconnect();
+    };
+  }, [status, realtime, navigate]);
 
   const login = useCallback(async (email, password) => {
     const { data } = await authApi.login(email, password);

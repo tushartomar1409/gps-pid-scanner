@@ -55,14 +55,45 @@ export const assignmentsApi = {
   bulk: (body) => api.post('/route-assignments/bulk', body, { timeout: 180_000 }).then(unwrap),
   cancel: (id) => api.patch(`/route-assignments/${id}/cancel`).then(unwrap),
   resnapshot: (id) => api.post(`/route-assignments/${id}/resnapshot`).then(unwrap),
+  mapPids: (id, { signal } = {}) => api.get(`/route-assignments/${id}/map-pids`, { signal, timeout: 60_000 }).then(unwrap),
+  comparison: (id, { signal } = {}) => api.get(`/route-assignments/${id}/comparison`, { signal, timeout: 60_000 }).then(unwrap),
 };
 
 export const settingsApi = {
   public: () => api.get('/settings/public').then(unwrap),
+  /** SUPER_ADMIN: every setting with editable/default/schema */
+  all: () => api.get('/settings').then(unwrap),
+  update: (key, value) => api.put(`/settings/${encodeURIComponent(key)}`, { value }).then(unwrap),
 };
 
 export const gpsApi = {
   providerStatus: ({ signal } = {}) => api.get('/gps/provider-status', { signal }).then(unwrap),
+  config: () => api.get('/gps/config').then(unwrap),
+  pollNow: () => api.post('/gps/poll-now', null, { timeout: 120_000 }).then(unwrap),
+  liveVehicles: (params, { signal } = {}) => api.get('/gps/live-vehicles', { params: cleanParams(params), signal }).then(unwrap),
+  liveVehicle: (id, { signal } = {}) => api.get(`/gps/live-vehicles/${id}`, { signal }).then(unwrap),
+  history: (params, { signal } = {}) => api.get('/gps/vehicle-history', { params: cleanParams(params), signal, timeout: 60_000 }).then(unwrap),
+};
+
+export const dashboardApi = {
+  summary: (params, { signal } = {}) => api.get('/dashboard/summary', { params: cleanParams(params), signal }).then(unwrap),
+  /** group: zone-coverage | ward-coverage | agency-performance | vehicle-performance */
+  grouped: (group, params, { signal } = {}) => api.get(`/dashboard/${group}`, { params: cleanParams(params), signal }).then(unwrap),
+  dailyTrend: (params, { signal } = {}) => api.get('/dashboard/daily-trend', { params: cleanParams(params), signal }).then(unwrap),
+  hourly: (params, { signal } = {}) => api.get('/dashboard/hourly-activity', { params: cleanParams(params), signal }).then(unwrap),
+};
+
+export const visitsApi = {
+  events: (params, { signal } = {}) => api.get('/pid-visits', { params: cleanParams(params), signal }).then(unwrap),
+};
+
+export const detectionApi = {
+  /** body: { route_assignment_id } | { operational_date, zone_id? } */
+  reprocess: (body) => api.post('/detection/reprocess', body, { timeout: 180_000 }).then(unwrap),
+};
+
+export const activityLogsApi = {
+  list: (params, { signal } = {}) => api.get('/activity-logs', { params: cleanParams(params), signal }).then(unwrap),
 };
 
 export const referenceApi = {

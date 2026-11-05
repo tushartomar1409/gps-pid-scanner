@@ -6,9 +6,9 @@ import { ErrorState } from '../components/ErrorState.jsx';
 
 /**
  * Guards child routes. No session -> /login?redirect=<current path>.
- * With `permission`, an authenticated user lacking it sees a 403 state (no data is fetched).
+ * With `permission` (and/or `role`), an authenticated user lacking it sees a 403 state (no data is fetched).
  */
-export function ProtectedRoute({ permission, children }) {
+export function ProtectedRoute({ permission, role, children }) {
   const { user, status } = useAuth();
   const location = useLocation();
 
@@ -23,7 +23,7 @@ export function ProtectedRoute({ permission, children }) {
     const redirect = encodeURIComponent(location.pathname + location.search);
     return <Navigate to={`/login?redirect=${redirect}`} replace />;
   }
-  if (permission && !hasPermission(user, permission)) {
+  if ((permission && !hasPermission(user, permission)) || (role && user.role_key !== role)) {
     return <ErrorState title="Access denied" message="You do not have permission to view this page." />;
   }
   return children ?? <Outlet />;

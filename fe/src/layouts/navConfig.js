@@ -1,9 +1,19 @@
 // Sidebar items. Only pages that actually exist are listed (flow.txt §27 rule 16).
-// `permission: null` = visible to every authenticated user.
+// `permission: null` = visible to every authenticated user; `role` = only that role;
+// `hideIf` = hidden when the user has that permission (Home is replaced by Dashboard).
 export const NAV_SECTIONS = [
   {
     title: null,
-    items: [{ to: '/', label: 'Home', permission: null, end: true }],
+    items: [{ to: '/', label: 'Home', permission: null, hideIf: 'dashboard:read', end: true }],
+  },
+  {
+    title: 'Monitoring',
+    items: [
+      { to: '/', label: 'Dashboard', permission: 'dashboard:read', end: true },
+      { to: '/live', label: 'Live Tracking', permission: 'gps:read' },
+      { to: '/coverage', label: 'Coverage Map', permission: 'assignments:read' },
+      { to: '/history', label: 'GPS History', permission: 'gps:read' },
+    ],
   },
   {
     title: 'Operations',
@@ -25,6 +35,11 @@ export const NAV_SECTIONS = [
   },
   {
     title: 'Administration',
-    items: [{ to: '/users', label: 'Users', permission: 'users:read' }],
+    items: [
+      { to: '/users', label: 'Users', permission: 'users:read' },
+      { to: '/settings/detection', label: 'Detection Settings', permission: null, role: 'SUPER_ADMIN' },
+      { to: '/settings/gps', label: 'GPS Integration', permission: 'gps:read' },
+      { to: '/settings/activity-logs', label: 'Activity Logs', permission: null, role: 'SUPER_ADMIN' },
+    ],
   },
 ];

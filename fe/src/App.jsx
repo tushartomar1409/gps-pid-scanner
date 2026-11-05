@@ -1,25 +1,36 @@
 // Route table for the data router (createBrowserRouter). Using a data router enables useBlocker
 // (unsaved-changes guard that also catches browser Back/Forward).
+// Every page is a lazy chunk (GUIDE #9 A1): the initial bundle is only the shell + login.
+import { lazy, Suspense } from 'react';
 import { Outlet } from 'react-router-dom';
 import { AuthProvider } from './auth/AuthContext.jsx';
 import { SettingsProvider } from './settings/SettingsContext.jsx';
 import { ProtectedRoute } from './auth/ProtectedRoute.jsx';
 import { AppLayout } from './layouts/AppLayout.jsx';
+import { PageSkeleton } from './components/Skeleton.jsx';
 import LoginPage from './pages/LoginPage.jsx';
-import HomePage from './pages/HomePage.jsx';
-import NotFoundPage from './pages/NotFoundPage.jsx';
-import ZonesPage from './pages/masters/ZonesPage.jsx';
-import WardsPage from './pages/masters/WardsPage.jsx';
-import AgenciesPage from './pages/masters/AgenciesPage.jsx';
-import VehiclesPage from './pages/masters/VehiclesPage.jsx';
-import UsersPage from './pages/masters/UsersPage.jsx';
-import PidsPage from './pages/pids/PidsPage.jsx';
-import PidImportPage from './pages/pids/PidImportPage.jsx';
-import RoutesPage from './pages/routes/RoutesPage.jsx';
-import RouteBuilderPage from './pages/routes/RouteBuilderPage.jsx';
-import AssignmentsPage from './pages/assignments/AssignmentsPage.jsx';
 
-const guard = (permission, element) => <ProtectedRoute permission={permission}>{element}</ProtectedRoute>;
+const IndexPage = lazy(() => import('./pages/IndexPage.jsx'));
+const NotFoundPage = lazy(() => import('./pages/NotFoundPage.jsx'));
+const ZonesPage = lazy(() => import('./pages/masters/ZonesPage.jsx'));
+const WardsPage = lazy(() => import('./pages/masters/WardsPage.jsx'));
+const AgenciesPage = lazy(() => import('./pages/masters/AgenciesPage.jsx'));
+const VehiclesPage = lazy(() => import('./pages/masters/VehiclesPage.jsx'));
+const UsersPage = lazy(() => import('./pages/masters/UsersPage.jsx'));
+const PidsPage = lazy(() => import('./pages/pids/PidsPage.jsx'));
+const PidImportPage = lazy(() => import('./pages/pids/PidImportPage.jsx'));
+const RoutesPage = lazy(() => import('./pages/routes/RoutesPage.jsx'));
+const RouteBuilderPage = lazy(() => import('./pages/routes/RouteBuilderPage.jsx'));
+const AssignmentsPage = lazy(() => import('./pages/assignments/AssignmentsPage.jsx'));
+const LiveTrackingPage = lazy(() => import('./pages/live/LiveTrackingPage.jsx'));
+const CoverageMapPage = lazy(() => import('./pages/coverage/CoverageMapPage.jsx'));
+const HistoryPage = lazy(() => import('./pages/history/HistoryPage.jsx'));
+const DetectionSettingsPage = lazy(() => import('./pages/settings/DetectionSettingsPage.jsx'));
+const GpsIntegrationPage = lazy(() => import('./pages/settings/GpsIntegrationPage.jsx'));
+const ActivityLogsPage = lazy(() => import('./pages/settings/ActivityLogsPage.jsx'));
+
+const page = (el) => <Suspense fallback={<PageSkeleton />}>{el}</Suspense>;
+const guard = (permission, element, role) => <ProtectedRoute permission={permission} role={role}>{page(element)}</ProtectedRoute>;
 
 /** AuthProvider needs router hooks (useNavigate), so it lives inside the router as the root element. */
 function Root() {
@@ -43,7 +54,10 @@ export const routes = [
           {
             element: <AppLayout />,
             children: [
-              { index: true, element: <HomePage /> },
+              { index: true, element: page(<IndexPage />) },
+              { path: 'live', element: guard('gps:read', <LiveTrackingPage />) },
+              { path: 'coverage', element: guard('assignments:read', <CoverageMapPage />) },
+              { path: 'history', element: guard('gps:read', <HistoryPage />) },
               { path: 'pids', element: guard('pids:read', <PidsPage />) },
               { path: 'pids/import', element: guard('pids:write', <PidImportPage />) },
               { path: 'routes', element: guard('routes:read', <RoutesPage />) },
@@ -55,7 +69,10 @@ export const routes = [
               { path: 'agencies', element: guard('agencies:read', <AgenciesPage />) },
               { path: 'vehicles', element: guard('vehicles:read', <VehiclesPage />) },
               { path: 'users', element: guard('users:read', <UsersPage />) },
-              { path: '*', element: <NotFoundPage /> },
+              { path: 'settings/detection', element: guard(null, <DetectionSettingsPage />, 'SUPER_ADMIN') },
+              { path: 'settings/gps', element: guard('gps:read', <GpsIntegrationPage />) },
+              { path: 'settings/activity-logs', element: guard(null, <ActivityLogsPage />, 'SUPER_ADMIN') },
+              { path: '*', element: page(<NotFoundPage />) },
             ],
           },
         ],

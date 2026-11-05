@@ -18,3 +18,10 @@ export function parseApiError(err) {
     constraint: errors.find((e) => e.constraint)?.constraint ?? null,
   };
 }
+
+/** One display string: the field error for `value` if any, else the server message, else `fallback`. */
+export function apiErrorMessage(err, fallback = 'Request failed') {
+  const p = parseApiError(err);
+  if (p.canceled) return fallback;
+  return p.fieldErrors?.value || p.message || fallback;
+}

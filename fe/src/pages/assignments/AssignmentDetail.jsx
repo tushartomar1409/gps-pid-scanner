@@ -10,16 +10,17 @@ import { assignmentsApi } from '../../api/resources.js';
 import { parseApiError } from '../../utils/apiErrors.js';
 import { formatShift, formatOpDate } from '../../utils/dates.js';
 import { CoverageBar } from './CoverageBar.jsx';
+import { Link } from 'react-router-dom';
+import { Disclaimer } from '../../components/Disclaimer.jsx';
+import { VISIT_STATUS, VISIT_STATUS_ORDER } from '../../utils/visitStatus.js';
+import { usePermission } from '../../auth/usePermission.js';
 
-const VISIT_LABELS = {
-  GPS_VISIT_CONFIRMED: 'GPS visit confirmed',
-  GPS_VISIT_CANDIDATE: 'GPS visit candidate',
-  NOT_VISITED: 'Not visited',
-  GPS_DATA_UNAVAILABLE: 'GPS data unavailable',
-};
-const VISIT_COLORS = { GPS_VISIT_CONFIRMED: '#16a34a', GPS_VISIT_CANDIDATE: '#eab308', NOT_VISITED: '#dc2626', GPS_DATA_UNAVAILABLE: '#94a3b8' };
+// One status/colour map for the whole app (GUIDE #9 A4).
+const VISIT_LABELS = Object.fromEntries(VISIT_STATUS_ORDER.map((k) => [k, VISIT_STATUS[k].label]));
+const VISIT_COLORS = Object.fromEntries(VISIT_STATUS_ORDER.map((k) => [k, VISIT_STATUS[k].color]));
 
 export function AssignmentDetail({ id, renderMap = true }) {
+  const can = usePermission();
   const [page, setPage] = useState(1);
   const [visitStatus, setVisitStatus] = useState('');
   const [state, setState] = useState({ data: null, loading: true, error: null });
@@ -55,9 +56,11 @@ export function AssignmentDetail({ id, renderMap = true }) {
         <dt className="text-slate-500">Status</dt><dd><StatusBadge status={data.status} /></dd>
         <dt className="text-slate-500">Coverage</dt><dd><CoverageBar row={data} /></dd>
       </dl>
-      <p className="text-xs text-slate-500">
-        This is the frozen PID snapshot taken when the assignment was created. GPS proximity indicates a vehicle passed near a property; it does not prove collection.
-      </p>
+      <p className="text-xs text-slate-500">This is the frozen PID snapshot taken when the assignment was created.</p>
+      <Disclaimer />
+      {can('assignments:read') && (
+        <Link to={`/coverage?date=${data.operational_date}&assignment=${id}`} className="text-sm font-medium text-emerald-700 hover:underline">Open coverage map</Link>
+      )}
       {renderMap && mapPoints.length > 0 && (
         <BaseMap className="h-64">
           <FitToPoints points={mapPoints.map((p) => [p.latitude, p.longitude])} fitKey={`${id}|${page}|${visitStatus}`} />
@@ -85,7 +88,7 @@ export function AssignmentDetail({ id, renderMap = true }) {
             key: 'visit_status', header: 'Status', render: (p) => (
               <span className="inline-flex items-center gap-1.5 text-xs">
                 <span className="h-2.5 w-2.5 rounded-full" style={{ background: VISIT_COLORS[p.visit_status] }} aria-hidden="true" />
-                {VISIT_LABELS[p.visit_status] || p.visit_status}
+                <span aria-hidden="true">{VISIT_STATUS[p.visit_status]?.symbol}</span> {VISIT_LABELS[p.visit_status] || p.visit_status}
               </span>
             ),
           },
