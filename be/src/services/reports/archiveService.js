@@ -196,6 +196,10 @@ export async function archiveFile(id, { db = defaultDb, dir = reportsDir() } = {
 }
 
 /** Leader-safe scheduler: checks every `tickMs`; after a "waiting" result it retries hourly. */
+let lastRun = null;
+/** Last scheduler pass on this instance (ops details). */
+export const lastArchiveRun = () => lastRun;
+
 export function startReportArchive({ tickMs = 5 * 60_000, retryMs = 60 * 60_000, logger = defaultLogger } = {}) {
   let timer = null;
   let stopped = false;
@@ -206,6 +210,7 @@ export function startReportArchive({ tickMs = 5 * 60_000, retryMs = 60 * 60_000,
     if (Date.now() >= nextAttemptAt) {
       running = runDailyArchive({ logger })
         .then((r) => {
+          lastRun = { at: new Date().toISOString(), status: r.status, operational_date: r.operational_date ?? null, regenerated: r.regenerated?.length ?? 0 };
           if (r.status === 'waiting') nextAttemptAt = Date.now() + retryMs;
           if (r.status === 'done') logger.info({ result: r }, 'Daily reports archived');
         })

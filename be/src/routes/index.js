@@ -15,12 +15,20 @@ import { createPidVisitRoutes, createDetectionRoutes, createSettingsAdminRoutes 
 import { createDashboardRoutes } from './dashboardRoutes.js';
 import { createActivityLogRoutes } from './activityLogRoutes.js';
 import { createReportRoutes } from './reportRoutes.js';
+import { readiness, details as opsDetails } from '../services/opsService.js';
+import { requireRole } from '../middleware/roleMiddleware.js';
 import { sendSuccess } from '../utils/responseHandler.js';
 
 export function createApiRouter() {
   const api = Router();
 
-  api.get('/health', (_req, res) => sendSuccess(res, { message: 'OK', data: { status: 'up' } }));
+  api.get('/health', (_req, res) => sendSuccess(res, { message: 'OK', data: { status: 'up' } })); // liveness
+  // Readiness (GUIDE #11 E): DB reachable + migrations up to date, else 503. Unauthenticated, no details.
+  api.get('/health/ready', async (_req, res) => {
+    const r = await readiness();
+    if (r.ready) return sendSuccess(res, { message: 'Ready', data: r });
+    return res.status(503).json({ success: false, message: 'Not ready', data: r });
+  });
   api.use('/auth', createAuthRoutes());
 
   // Protected resources: valid token + row-level scope. Mounted per path (not as a catch-all)
@@ -44,6 +52,9 @@ export function createApiRouter() {
   api.use('/dashboard', ...guard, createDashboardRoutes());
   api.use('/activity-logs', ...guard, createActivityLogRoutes());
   api.use('/reports', ...guard, createReportRoutes());
+  api.get('/health/details', ...guard, requireRole('SUPER_ADMIN'), async (_req, res) => {
+    sendSuccess(res, { message: 'Operational details', data: await opsDetails() });
+  });
 
   return api;
 }

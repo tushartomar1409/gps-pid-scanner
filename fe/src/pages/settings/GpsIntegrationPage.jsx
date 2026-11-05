@@ -23,6 +23,64 @@ export function pollNowMessage(err) {
   return p.status === 429 ? 'Poll-now is limited to once every 30 seconds. Please wait and try again.' : p.message;
 }
 
+const mb = (b) => (b == null ? '—' : b > 1073741824 ? `${(b / 1073741824).toFixed(1)} GB` : `${(b / 1048576).toFixed(1)} MB`);
+const fmtLag = (s) => (s < 60 ? `${s} s` : s < 3600 ? `${Math.round(s / 60)} min` : `${(s / 3600).toFixed(1)} h`);
+
+/** SUPER_ADMIN "Operations" card from GET /api/health/details (GUIDE #11 E). */
+export function OperationsCard() {
+  const q = useApiQuery((signal) => gpsApi.healthDetails({ signal }).then((r) => r.data), 'ops');
+  const d = q.data;
+  const Job = ({ name, j }) => (
+    <li className="flex items-center justify-between gap-2 border-b border-slate-100 py-1 text-sm">
+      <span className="font-mono text-slate-700">{name}</span>
+      <span className={j?.enabled ? 'text-emerald-800' : 'text-slate-400'}>
+        {j?.enabled ? (j.leader === undefined ? 'enabled' : j.leader ? 'enabled · leader' : 'enabled · standby') : 'off on this instance'}
+      </span>
+    </li>
+  );
+  return (
+    <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm" aria-label="Operations">
+      <div className="mb-2 flex items-center justify-between">
+        <h2 className="text-sm font-semibold text-slate-800">Operations</h2>
+        <button type="button" onClick={q.reload} className="text-xs font-medium text-emerald-700 hover:underline">Refresh</button>
+      </div>
+      {q.error ? <ErrorState message={q.error} onRetry={q.reload} /> : !d ? <Spinner /> : (
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <div>
+            <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">Background jobs (this instance)</h3>
+            <ul>{Object.entries(d.jobs).map(([k, j]) => <Job key={k} name={k} j={j} />)}</ul>
+            <h3 className="mb-1 mt-3 text-xs font-semibold uppercase tracking-wide text-slate-500">Detection</h3>
+            <p className={`text-sm ${d.detection.lag_seconds > 300 ? 'text-amber-800' : 'text-slate-700'}`}>
+              Lag {fmtLag(d.detection.lag_seconds)} · {d.detection.unprocessed_points.toLocaleString('en-IN')}{d.detection.unprocessed_capped ? '+' : ''} unprocessed points
+            </p>
+            <p className="text-sm text-slate-700">Last poll: {d.gps_poll.state}{d.gps_poll.last_success_at ? ` · last success ${formatDateTime(d.gps_poll.last_success_at)}` : ''}</p>
+            <p className="text-sm text-slate-700">
+              Report archive: {d.archive.last_run ? `${d.archive.last_run.status} (${formatDateTime(d.archive.last_run.at)})` : 'no run on this instance yet'}
+            </p>
+          </div>
+          <div>
+            <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">GPS partitions</h3>
+            {d.gps_partitions.alert && <p className="mb-1 rounded bg-red-50 px-2 py-1 text-sm text-red-800" role="alert">⚠ {d.gps_partitions.alert}</p>}
+            <p className="text-xs text-slate-500">Raw GPS kept from {formatDateTime(d.gps_partitions.retained_from)}</p>
+            <table className="mt-1 w-full text-xs">
+              <thead className="text-slate-500"><tr><th className="text-left">Partition</th><th className="text-right">Rows (est.)</th><th className="text-right">Size</th></tr></thead>
+              <tbody>
+                {d.gps_partitions.partitions.map((p) => (
+                  <tr key={p.name} className={p.is_default && p.est_rows > 0 ? 'text-red-800' : ''}>
+                    <td className="font-mono">{p.name}</td>
+                    <td className="text-right tabular-nums">{p.est_rows == null ? '—' : p.est_rows.toLocaleString('en-IN')}</td>
+                    <td className="text-right tabular-nums">{mb(p.total_bytes)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
 export default function GpsIntegrationPage() {
   const { user } = useAuth();
   const toast = useToast();
@@ -55,6 +113,7 @@ export default function GpsIntegrationPage() {
         <h1 className="text-xl font-semibold text-slate-900">GPS Integration</h1>
         <p className="text-sm text-slate-500">Provider credentials are configured on the server and never shown here.</p>
       </div>
+      {user?.role_key === 'SUPER_ADMIN' && <OperationsCard />}
       <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm" aria-label="Configuration">
         <h2 className="mb-2 text-sm font-semibold text-slate-800">Configuration (read-only)</h2>
         {cfg.error ? <ErrorState message={cfg.error} onRetry={cfg.reload} /> : !cfg.data ? <Spinner /> : (

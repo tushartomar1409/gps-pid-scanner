@@ -69,6 +69,8 @@ export const settingsApi = {
 export const gpsApi = {
   providerStatus: ({ signal } = {}) => api.get('/gps/provider-status', { signal }).then(unwrap),
   config: () => api.get('/gps/config').then(unwrap),
+  /** SUPER_ADMIN ops details (GUIDE #11 E) */
+  healthDetails: ({ signal } = {}) => api.get('/health/details', { signal }).then(unwrap),
   pollNow: () => api.post('/gps/poll-now', null, { timeout: 120_000 }).then(unwrap),
   liveVehicles: (params, { signal } = {}) => api.get('/gps/live-vehicles', { params: cleanParams(params), signal }).then(unwrap),
   liveVehicle: (id, { signal } = {}) => api.get(`/gps/live-vehicles/${id}`, { signal }).then(unwrap),
