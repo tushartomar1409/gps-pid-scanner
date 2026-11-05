@@ -15,14 +15,20 @@ export const COVERED_STATUS = 'GPS_VISIT_CONFIRMED';
 const RA_SELECT = `ra.id, ra.operational_date::text AS operational_date, ra.shift_start, ra.shift_end, ra.status,
   ra.route_id, r.route_code, r.route_name, r.zone_id, z.zone_name, r.ward_id, w.ward_name,
   ra.vehicle_id, v.vehicle_number, ra.agency_id, a.agency_name, ra.assigned_pid_count,
-  (SELECT count(*) FROM pid_daily_status s WHERE s.route_assignment_id = ra.id AND s.visit_status = '${COVERED_STATUS}') AS covered_pid_count,
+  cov.covered_pid_count, cov.candidate_pid_count, cov.unavailable_pid_count,
   ra.assigned_by, ra.created_at, ra.updated_at`;
+// covered = CONFIRMED only (flow §12 coverage formula). One aggregate per row via idx_pds_ra_status.
 const RA_FROM = `route_assignments ra
   JOIN routes r   ON r.id = ra.route_id
   JOIN zones z    ON z.id = r.zone_id
   JOIN wards w    ON w.id = r.ward_id
   JOIN vehicles v ON v.id = ra.vehicle_id
-  LEFT JOIN agencies a ON a.id = ra.agency_id`;
+  LEFT JOIN agencies a ON a.id = ra.agency_id
+  CROSS JOIN LATERAL (
+    SELECT count(*) FILTER (WHERE s.visit_status = '${COVERED_STATUS}')        AS covered_pid_count,
+           count(*) FILTER (WHERE s.visit_status = 'GPS_VISIT_CANDIDATE')     AS candidate_pid_count,
+           count(*) FILTER (WHERE s.visit_status = 'GPS_DATA_UNAVAILABLE')    AS unavailable_pid_count
+      FROM pid_daily_status s WHERE s.route_assignment_id = ra.id) cov`;
 
 async function findAssignment(id, scope, executor = defaultDb) {
   const where = applyScope(new SqlWhere(), scope, RA_SCOPE).add('ra.id = ?', id);

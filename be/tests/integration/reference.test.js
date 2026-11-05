@@ -44,7 +44,9 @@ describe('GET /api/lookups', () => {
     const { zones, wards, agencies } = res.body.data;
     expect(zones.map((z) => z.id)).toEqual(expect.arrayContaining([zoneA.id, zoneB.id]));
     expect(zones.map((z) => z.id)).not.toContain(inactive.id);
-    expect(wards.find((w) => w.id === wardA.id)).toEqual({ id: wardA.id, name: wardA.ward_name, code: wardA.ward_number, zone_id: zoneA.id });
+    expect(wards.find((w) => w.id === wardA.id)).toEqual({
+      id: wardA.id, name: wardA.ward_name, code: wardA.ward_number, zone_id: zoneA.id, ward_id: wardA.id, agency_id: null,
+    });
     expect(agencies.find((a) => a.id === agencyA.id)).toMatchObject({ id: agencyA.id, name: agencyA.agency_name });
   });
 
@@ -58,6 +60,24 @@ describe('GET /api/lookups', () => {
     const au = await createUser('AGENCY_USER', { agency_id: agencyB.id });
     const a = await request(app).get('/api/lookups?types=agencies').set(bearer(au.token));
     expect(a.body.data.agencies.map((x) => x.id)).toEqual([agencyB.id]);
+  });
+
+  it('returns active routes and vehicles with zone/ward/agency ids, scoped for agency users', async () => {
+    const route = (await pool.query(
+      `INSERT INTO routes (route_code, route_name, zone_id, ward_id, agency_id) VALUES ($1, 'Lookup route', $2, $3, $4) RETURNING id, route_code`,
+      [`LR${Date.now()}`, zoneA.id, wardA.id, agencyA.id])).rows[0];
+    const vehicle = (await pool.query(
+      `INSERT INTO vehicles (vehicle_number, vehicle_type, agency_id, zone_id, ward_id) VALUES ($1, 'Tipper', $2, $3, $4) RETURNING id, vehicle_number`,
+      [`LV${Date.now()}`, agencyB.id, zoneA.id, wardA.id])).rows[0];
+
+    const res = await request(app).get('/api/lookups?types=routes,vehicles').set(bearer(admin.token));
+    expect(res.body.data.routes.find((r) => r.id === route.id)).toMatchObject({ code: route.route_code, zone_id: zoneA.id, ward_id: wardA.id, agency_id: agencyA.id });
+    expect(res.body.data.vehicles.find((v) => v.id === vehicle.id)).toMatchObject({ name: vehicle.vehicle_number, code: 'Tipper', agency_id: agencyB.id });
+
+    const au = await createUser('AGENCY_USER', { agency_id: agencyB.id });
+    const scoped = await request(app).get('/api/lookups?types=routes,vehicles').set(bearer(au.token));
+    expect(scoped.body.data.routes.map((r) => r.id)).not.toContain(route.id);
+    expect(scoped.body.data.vehicles.every((v) => v.agency_id === agencyB.id)).toBe(true);
   });
 
   it('validates types and requires authentication', async () => {

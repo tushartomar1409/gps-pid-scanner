@@ -276,6 +276,25 @@ describe('bulk', () => {
   });
 });
 
+describe('coverage breakdown', () => {
+  it('list and detail return covered (CONFIRMED only), candidate and unavailable counts', async () => {
+    const { route, pids } = await createRouteWithPids(5, { withoutCoords: [4] });
+    const vehicle = await createVehicle();
+    const d = nextDay();
+    const id = (await post({ route_id: route.id, vehicle_id: vehicle.id, operational_date: d })).body.data.id;
+    await pool.query(
+      `UPDATE pid_daily_status SET visit_status = CASE pid_id WHEN $2 THEN 'GPS_VISIT_CONFIRMED' WHEN $3 THEN 'GPS_VISIT_CONFIRMED'
+         WHEN $4 THEN 'GPS_VISIT_CANDIDATE' ELSE visit_status END WHERE route_assignment_id = $1`,
+      [id, pids[0].id, pids[1].id, pids[2].id]);
+    const expected = { assigned_pid_count: 5, covered_pid_count: 2, candidate_pid_count: 1, unavailable_pid_count: 1 };
+
+    const list = await request(app).get(`/api/route-assignments?operational_date=${d}&vehicle_id=${vehicle.id}`).set(bearer(admin.token));
+    expect(list.body.data[0]).toMatchObject(expected);
+    const detail = await request(app).get(`/api/route-assignments/${id}`).set(bearer(admin.token));
+    expect(detail.body.data).toMatchObject(expected);
+  });
+});
+
 describe('list + scope', () => {
   it('defaults to today, filters by date range (max 31 days) and applies agency scope', async () => {
     const agency = await createAgency();
