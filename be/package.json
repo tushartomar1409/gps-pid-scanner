@@ -15,7 +15,9 @@
     "format": "prettier --write src scripts tests",
     "perf": "node scripts/seed-perf.js",
     "gps:purge-sim": "node scripts/gps-purge-sim.js",
-    "perf:gps": "node scripts/perf-gps.js"
+    "perf:gps": "node scripts/perf-gps.js",
+    "perf:detect": "node scripts/perf-detect.js",
+    "recall": "node scripts/recall-experiment.js"
   },
   "keywords": [],
   "author": "",

@@ -11,6 +11,7 @@ import { createRouteRoutes } from './routeRoutes.js';
 import { createRouteAssignmentRoutes } from './routeAssignmentRoutes.js';
 import { createSettingsRoutes } from './settingsRoutes.js';
 import { createGpsRoutes, createVehicleGpsAliasRoutes } from './gpsRoutes.js';
+import { createPidVisitRoutes, createDetectionRoutes, createSettingsAdminRoutes } from './detectionRoutes.js';
 import { sendSuccess } from '../utils/responseHandler.js';
 
 export function createApiRouter() {
@@ -32,8 +33,11 @@ export function createApiRouter() {
   api.use('/pids', ...guard, createPidRoutes());
   api.use('/routes', ...guard, createRouteRoutes());
   api.use('/route-assignments', ...guard, createRouteAssignmentRoutes());
-  api.use('/settings', ...guard, createSettingsRoutes());
+  // /settings/public (any user) is matched first; everything else under /settings is SUPER_ADMIN.
+  api.use('/settings', ...guard, createSettingsRoutes(), createSettingsAdminRoutes());
   api.use('/gps', ...guard, createGpsRoutes());
+  api.use('/pid-visits', ...guard, createPidVisitRoutes());
+  api.use('/detection', ...guard, createDetectionRoutes());
 
   return api;
 }

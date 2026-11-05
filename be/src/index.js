@@ -5,6 +5,7 @@ import { createApp } from './app.js';
 import { pool, closePool } from './config/database.js';
 import { logger } from './utils/logger.js';
 import { getProvider, startGpsPolling, stopGpsPolling } from './services/gps/gpsRuntime.js';
+import { PidVisitWorker } from './jobs/pidVisitProcessingJob.js';
 
 const app = createApp();
 const server = http.createServer(app);
@@ -15,7 +16,12 @@ async function start() {
   server.listen(env.PORT, () => logger.info({ port: env.PORT }, 'API server listening'));
   if (env.GPS_POLL_ENABLED) await startGpsPolling();
   else logger.info('GPS polling disabled (GPS_POLL_ENABLED=false)');
+  if (env.DETECTION_WORKER_ENABLED ?? env.GPS_POLL_ENABLED) {
+    detectionWorker = new PidVisitWorker();
+    await detectionWorker.start();
+  } else logger.info('PID detection worker disabled');
 }
+let detectionWorker = null;
 
 let shuttingDown = false;
 async function shutdown(signal) {
@@ -24,6 +30,7 @@ async function shutdown(signal) {
   logger.info({ signal }, 'Shutting down');
   setTimeout(() => process.exit(1), 15_000).unref();
   await stopGpsPolling().catch((err) => logger.warn({ err: err.message }, 'GPS poller stop failed')); // waits ≤ 10 s
+  await detectionWorker?.stop().catch((err) => logger.warn({ err: err.message }, 'Detection worker stop failed'));
   server.close(async () => {
     await closePool().catch(() => {});
     process.exit(0);

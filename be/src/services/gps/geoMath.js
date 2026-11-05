@@ -1,17 +1,15 @@
-// Small geo helpers for the simulator (Phase 4 adds the detection Haversine utilities).
-const R = 6_371_000; // metres
+// Path helpers for the simulator. Distance comes from the single shared implementation
+// (src/utils/haversine.js) — no second copy of the formula.
+import { haversineMeters, M_PER_DEG_LAT, MIN_COS_LAT } from '../../utils/haversine.js';
+
 const rad = (d) => (d * Math.PI) / 180;
 
-export function haversineM([lat1, lng1], [lat2, lng2]) {
-  const dLat = rad(lat2 - lat1);
-  const dLng = rad(lng2 - lng1);
-  const a = Math.sin(dLat / 2) ** 2 + Math.cos(rad(lat1)) * Math.cos(rad(lat2)) * Math.sin(dLng / 2) ** 2;
-  return 2 * R * Math.asin(Math.sqrt(a));
-}
+/** [lat, lng] tuple convenience wrapper. */
+export const haversineM = ([lat1, lng1], [lat2, lng2]) => haversineMeters(lat1, lng1, lat2, lng2);
 
-/** Offset a point by (northM, eastM) metres (small-distance approximation). */
+/** Offset a point by (northM, eastM) metres (small-distance approximation on the same sphere). */
 export function offsetM([lat, lng], northM, eastM) {
-  return [lat + northM / 111_320, lng + eastM / (111_320 * Math.cos(rad(lat)))];
+  return [lat + northM / M_PER_DEG_LAT, lng + eastM / (M_PER_DEG_LAT * Math.max(Math.cos(rad(lat)), MIN_COS_LAT))];
 }
 
 /** Precompute cumulative distances for a closed loop over the path. */

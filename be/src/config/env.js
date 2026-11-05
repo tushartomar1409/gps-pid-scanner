@@ -42,6 +42,11 @@ const schema = z.object({
   GPS_SIM_BAD_PCT: z.coerce.number().min(0).max(100).default(0),
   GPS_SIM_OFFLINE_VEHICLES: z.string().default(''),
   GPS_SIM_PLAN_REFRESH_POLLS: z.coerce.number().int().positive().default(10),
+  // ---- PID detection (Phase 4). Worker defaults to running wherever GPS polling runs.
+  DETECTION_WORKER_ENABLED: bool.optional(),
+  DETECTION_BATCH_SIZE: z.coerce.number().int().min(100).max(50_000).default(5000),
+  DETECTION_CATCHUP_SECONDS: z.coerce.number().int().positive().default(60),
+  DETECTION_FINALIZE_MINUTES: z.coerce.number().int().positive().default(15),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
   CORS_ORIGIN: z.string().default('http://localhost:5173'),
   TRUST_PROXY: bool.default(false),
