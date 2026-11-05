@@ -14,7 +14,8 @@ export function createApp() {
   if (env.TRUST_PROXY) app.set('trust proxy', 1); // behind nginx: real client IP for rate limiting/logs
 
   app.use(helmet());
-  app.use(cors({ origin: env.CORS_ORIGIN.split(',').map((s) => s.trim()), credentials: true }));
+  // Content-Disposition is exposed so a cross-origin frontend can read the export filename (GUIDE #10 D3).
+  app.use(cors({ origin: env.CORS_ORIGIN.split(',').map((s) => s.trim()), credentials: true, exposedHeaders: ['Content-Disposition'] }));
   app.use(express.json({ limit: '1mb' }));
   app.use(pinoHttp({ logger, autoLogging: env.NODE_ENV !== 'test' }));
 

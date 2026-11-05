@@ -47,6 +47,13 @@ const schema = z.object({
   DETECTION_BATCH_SIZE: z.coerce.number().int().min(100).max(50_000).default(5000),
   DETECTION_CATCHUP_SECONDS: z.coerce.number().int().positive().default(60),
   DETECTION_FINALIZE_MINUTES: z.coerce.number().int().positive().default(15),
+  // ---- Reports (Phase 6). Daily archive runs where the detection worker runs unless set explicitly.
+  REPORTS_ARCHIVE_ENABLED: bool.optional(),
+  REPORTS_DAILY_TIME: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Use HH:mm').default('06:00'),
+  REPORTS_WAIT_UNTIL: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Use HH:mm').default('12:00'),
+  REPORTS_DIR: z.string().default('storage/reports'),
+  REPORTS_RETENTION_DAYS: z.coerce.number().int().min(1).max(3650).default(90),
+  REPORTS_EXPORTS_PER_MIN: z.coerce.number().int().positive().default(5),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
   CORS_ORIGIN: z.string().default('http://localhost:5173'),
   TRUST_PROXY: bool.default(false),

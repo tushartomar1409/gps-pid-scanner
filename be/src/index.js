@@ -1,4 +1,4 @@
-// Process entry point: HTTP server + (optional) GPS polling job. Socket.IO arrives in Phase 5.
+// Process entry point: HTTP server + Socket.IO + (optional) GPS polling, detection worker, daily report archive.
 import http from 'node:http';
 import { env } from './config/env.js';
 import { createApp } from './app.js';
@@ -7,6 +7,7 @@ import { logger } from './utils/logger.js';
 import { getProvider, startGpsPolling, stopGpsPolling } from './services/gps/gpsRuntime.js';
 import { PidVisitWorker } from './jobs/pidVisitProcessingJob.js';
 import { attachRealtime } from './realtime/socketServer.js';
+import { startReportArchive } from './services/reports/archiveService.js';
 
 const app = createApp();
 const server = http.createServer(app);
@@ -22,7 +23,12 @@ async function start() {
     detectionWorker = new PidVisitWorker();
     await detectionWorker.start();
   } else logger.info('PID detection worker disabled');
+  if (env.REPORTS_ARCHIVE_ENABLED ?? env.DETECTION_WORKER_ENABLED ?? env.GPS_POLL_ENABLED) {
+    reportArchive = startReportArchive({ logger });
+    logger.info({ at: env.REPORTS_DAILY_TIME, dir: env.REPORTS_DIR }, 'Daily report archive scheduled');
+  } else logger.info('Daily report archive disabled');
 }
+let reportArchive = null;
 let detectionWorker = null;
 
 let shuttingDown = false;
@@ -33,6 +39,7 @@ async function shutdown(signal) {
   setTimeout(() => process.exit(1), 15_000).unref();
   await stopGpsPolling().catch((err) => logger.warn({ err: err.message }, 'GPS poller stop failed')); // waits ≤ 10 s
   await detectionWorker?.stop().catch((err) => logger.warn({ err: err.message }, 'Detection worker stop failed'));
+  await reportArchive?.stop().catch(() => {});
   await realtime.close().catch(() => {});
   server.close(async () => {
     await closePool().catch(() => {});

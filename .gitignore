@@ -19,3 +19,6 @@ build/
 *.log
 .DS_Store
 Thumbs.db
+
+# generated report archive (GUIDE #10 C)
+/be/storage/

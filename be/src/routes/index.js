@@ -14,6 +14,7 @@ import { createGpsRoutes, createVehicleGpsAliasRoutes } from './gpsRoutes.js';
 import { createPidVisitRoutes, createDetectionRoutes, createSettingsAdminRoutes } from './detectionRoutes.js';
 import { createDashboardRoutes } from './dashboardRoutes.js';
 import { createActivityLogRoutes } from './activityLogRoutes.js';
+import { createReportRoutes } from './reportRoutes.js';
 import { sendSuccess } from '../utils/responseHandler.js';
 
 export function createApiRouter() {
@@ -42,6 +43,7 @@ export function createApiRouter() {
   api.use('/detection', ...guard, createDetectionRoutes());
   api.use('/dashboard', ...guard, createDashboardRoutes());
   api.use('/activity-logs', ...guard, createActivityLogRoutes());
+  api.use('/reports', ...guard, createReportRoutes());
 
   return api;
 }
