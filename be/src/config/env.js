@@ -19,6 +19,7 @@ const schema = z.object({
     .regex(/^[a-z_][a-z0-9_]{0,62}$/, 'DB_SCHEMA must be a lowercase identifier')
     .optional(),
   DB_POOL_MAX: z.coerce.number().int().positive().default(10),
+  DB_CONNECT_TIMEOUT_MS: z.coerce.number().int().positive().default(15_000),
   JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters'),
   JWT_EXPIRES_IN: z.string().default('8h'),
   BCRYPT_ROUNDS: z.coerce.number().int().min(4).max(15).default(12),
@@ -47,6 +48,8 @@ const schema = z.object({
   DETECTION_BATCH_SIZE: z.coerce.number().int().min(100).max(50_000).default(5000),
   DETECTION_CATCHUP_SECONDS: z.coerce.number().int().positive().default(60),
   DETECTION_FINALIZE_MINUTES: z.coerce.number().int().positive().default(15),
+  // ---- GPS data lifecycle (Phase 7a): partition pre-creation + retention job.
+  GPS_LIFECYCLE_ENABLED: bool.default(true),
   // ---- Reports (Phase 6). Daily archive runs where the detection worker runs unless set explicitly.
   REPORTS_ARCHIVE_ENABLED: bool.optional(),
   REPORTS_DAILY_TIME: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Use HH:mm').default('06:00'),
@@ -62,10 +65,36 @@ const schema = z.object({
   IMPORT_MAX_FILE_MB: z.coerce.number().positive().max(50).default(10),
 });
 
-const parsed = schema.safeParse(process.env);
-if (!parsed.success) {
-  const details = parsed.error.issues.map((i) => `  - ${i.path.join('.')}: ${i.message}`).join('\n');
-  throw new Error(`Invalid environment configuration:\n${details}`);
+// Values copied from .env.example (or obviously placeholder) must never reach production.
+const PLACEHOLDER_SECRET = /^<.*>$|generate|change[-_ ]?me|example|placeholder|secret$/i;
+
+/**
+ * Production-only safety rules (GUIDE #11 C5). Startup FAILS on any of them.
+ * `raw` is the untouched source, needed to tell "TRUST_PROXY not set" from "set to false".
+ */
+export function productionProblems(e, raw) {
+  if (e.NODE_ENV !== 'production') return [];
+  const problems = [];
+  if (Buffer.byteLength(e.JWT_SECRET, 'utf8') < 32) problems.push('JWT_SECRET must be at least 32 bytes');
+  if (PLACEHOLDER_SECRET.test(e.JWT_SECRET)) problems.push('JWT_SECRET is a placeholder value (generate one: openssl rand -hex 32)');
+  if (e.GPS_PROVIDER === 'simulator') problems.push('GPS_PROVIDER=simulator is not allowed in production');
+  const origins = e.CORS_ORIGIN.split(',').map((s) => s.trim());
+  if (origins.some((o) => o === '*' || o.includes('*'))) problems.push('CORS_ORIGIN must not contain a wildcard (*)');
+  if (origins.some((o) => /\/\/(localhost|127\.0\.0\.1|\[::1\]|0\.0\.0\.0)(:|$|\/)/i.test(o))) problems.push('CORS_ORIGIN must not contain localhost origins');
+  if (raw.TRUST_PROXY === undefined || raw.TRUST_PROXY === '') problems.push('TRUST_PROXY must be set explicitly (true behind nginx / a load balancer, false otherwise)');
+  return problems;
 }
 
-export const env = Object.freeze(parsed.data);
+/** Parses + validates an env source (process.env by default). Throws with every problem listed. */
+export function parseEnv(source = process.env) {
+  const parsed = schema.safeParse(source);
+  if (!parsed.success) {
+    const details = parsed.error.issues.map((i) => `  - ${i.path.join('.')}: ${i.message}`).join('\n');
+    throw new Error(`Invalid environment configuration:\n${details}`);
+  }
+  const prod = productionProblems(parsed.data, source);
+  if (prod.length) throw new Error(`Unsafe production configuration:\n${prod.map((p) => `  - ${p}`).join('\n')}`);
+  return Object.freeze(parsed.data);
+}
+
+export const env = parseEnv();

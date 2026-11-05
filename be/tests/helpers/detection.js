@@ -80,3 +80,23 @@ export async function events(raId) {
     'SELECT pid_id, gps_location_id, evidence_status, ambiguous, pids_in_radius, distance_meters FROM pid_visit_events WHERE route_assignment_id = $1 ORDER BY id', [raId]);
   return rows;
 }
+
+/**
+ * Insert visit events directly (tests that don't run detection). The self-contained gps_* evidence columns
+ * (GUIDE #11 A) are copied from the referenced GPS point, exactly as the detector does.
+ * events: [{ raId, pidId, vehicleId, gpsId, dist, status, ambiguous?, pidsInRadius? }]
+ */
+export async function insertEvents(events) {
+  const c = [[], [], [], [], [], [], [], []];
+  for (const e of events) {
+    c[0].push(e.raId); c[1].push(e.pidId); c[2].push(e.vehicleId); c[3].push(e.gpsId); c[4].push(e.dist);
+    c[5].push(e.status); c[6].push(e.ambiguous ?? false); c[7].push(e.pidsInRadius ?? 1);
+  }
+  await pool.query(
+    `INSERT INTO pid_visit_events (route_assignment_id, pid_id, vehicle_id, gps_location_id, distance_meters, detected_at, evidence_status,
+                                   ambiguous, pids_in_radius, speed_at_detection, gps_recorded_at, gps_latitude, gps_longitude, gps_speed)
+     SELECT t.ra, t.pid, t.veh, t.gid, t.dist, g.recorded_at, t.st, t.amb, t.pir, g.speed, g.recorded_at, g.latitude, g.longitude, g.speed
+       FROM unnest($1::bigint[], $2::bigint[], $3::int[], $4::bigint[], $5::numeric[], $6::text[], $7::boolean[], $8::int[])
+              AS t(ra, pid, veh, gid, dist, st, amb, pir)
+       JOIN gps_locations g ON g.id = t.gid`, c);
+}

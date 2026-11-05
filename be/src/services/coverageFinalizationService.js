@@ -5,6 +5,7 @@ import { withTransaction } from '../config/database.js';
 import { badRequest, notFound, unprocessable } from '../utils/errors.js';
 import { applyScope } from '../middleware/scopeMiddleware.js';
 import { SqlWhere } from '../utils/sql.js';
+import { assertRawGpsRetained } from './gps/gpsLifecycleService.js';
 
 /** Assignment window: [shift_start, shift_end) or [D 00:00, D+1 12:00) in the operational TZ. */
 const WINDOW_SQL = (alias, tzParam) => ({
@@ -82,6 +83,8 @@ async function reprocessOne(tx, raId, settings, ctx) {
        FROM route_assignments ra WHERE ra.id = $1 FOR UPDATE`, [raId, settings.timezone]);
   if (!ra) throw notFound(`Route assignment ${raId} not found`);
   if (ra.status === 'CANCELLED') throw unprocessable(`Route assignment ${raId} is cancelled`);
+  // Before touching anything: never delete evidence that can no longer be rebuilt (GUIDE #11 A).
+  await assertRawGpsRetained(ra.ws, `route assignment ${raId}`, tx);
   const ev = await tx.query('DELETE FROM pid_visit_events WHERE route_assignment_id = $1', [raId]);
   const st = await tx.query(
     `UPDATE pid_daily_status s

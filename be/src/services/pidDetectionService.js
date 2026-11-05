@@ -49,7 +49,7 @@ cand AS (
   -- haversine_m() is the exact filter.
   -- n = PIDs within radius of this point (ambiguity), as a window count: never join this CTE to an
   -- aggregate of itself (1-row CTE estimates turn that into a quadratic nested loop).
-  SELECT g.id AS gps_id, g.vehicle_id, g.ra_id, g.recorded_at, g.speed, g.evidence, c.pid_id, c.dist,
+  SELECT g.id AS gps_id, g.vehicle_id, g.ra_id, g.recorded_at, g.speed, g.lat AS gps_lat, g.lng AS gps_lng, g.evidence, c.pid_id, c.dist,
          count(*) OVER (PARTITION BY g.id, g.ra_id)::int AS n
     FROM gated g
     CROSS JOIN LATERAL (
@@ -71,12 +71,16 @@ nbr AS (
          n.dir, n.id AS n_id, n.recorded_at AS n_at, n.lat AS n_lat, n.lng AS n_lng, n.speed AS n_speed, n.received_at AS n_received
     FROM gated g
     CROSS JOIN LATERAL (
+      -- Bounded by the max segment gap ($12): a neighbour further away can never form a segment, and the
+      -- bound lets the planner prune gps_locations partitions per probe (GUIDE #11 A).
       (SELECT 'prev' AS dir, q.id, q.recorded_at, q.latitude::float8 AS lat, q.longitude::float8 AS lng, q.speed, q.received_at
          FROM gps_locations q WHERE q.vehicle_id = g.vehicle_id AND q.recorded_at < g.recorded_at
+          AND q.recorded_at >= g.recorded_at - make_interval(secs => $12::int)
         ORDER BY q.recorded_at DESC LIMIT 1)
       UNION ALL
       (SELECT 'next', q.id, q.recorded_at, q.latitude::float8, q.longitude::float8, q.speed, q.received_at
          FROM gps_locations q WHERE q.vehicle_id = g.vehicle_id AND q.recorded_at > g.recorded_at
+          AND q.recorded_at <= g.recorded_at + make_interval(secs => $12::int)
         ORDER BY q.recorded_at ASC LIMIT 1)
     ) n
    WHERE $10::boolean AND g.evidence = 'PROXIMITY_POINT'
@@ -86,6 +90,8 @@ segs AS (
          CASE WHEN dir = 'prev' THEN g_id ELSE n_id END    AS later_id,
          CASE WHEN dir = 'prev' THEN g_at ELSE n_at END    AS later_at,
          CASE WHEN dir = 'prev' THEN g_speed ELSE n_speed END AS later_speed,
+         CASE WHEN dir = 'prev' THEN g_lat ELSE n_lat END  AS later_lat,
+         CASE WHEN dir = 'prev' THEN g_lng ELSE n_lng END  AS later_lng,
          n_lat AS a_lat, n_lng AS a_lng, g_lat AS b_lat, g_lng AS b_lng
     FROM nbr x
    WHERE abs(extract(epoch FROM x.g_at - x.n_at)) <= $12::int
@@ -105,7 +111,7 @@ seg_dedup AS (
   -- already covers it (and the unique key would collide).
   SELECT DISTINCT ON (s.later_id, s.ra_id, c.pid_id)
          s.later_id AS gps_id, s.vehicle_id, s.ra_id, s.later_at AS recorded_at, s.later_speed AS speed,
-         'TRACK_SEGMENT'::text AS evidence, c.pid_id, c.dist
+         s.later_lat AS gps_lat, s.later_lng AS gps_lng, 'TRACK_SEGMENT'::text AS evidence, c.pid_id, c.dist
     FROM segs s
     CROSS JOIN LATERAL (
       SELECT rap.pid_id,
@@ -127,11 +133,15 @@ seg_cand AS (
   SELECT d.*, count(*) OVER (PARTITION BY d.gps_id, d.ra_id)::int AS n FROM seg_dedup d
 ),
 ins AS (
+  -- gps_* = self-contained copy of the point (GUIDE #11 A): evidence survives raw-GPS partition retention.
   INSERT INTO pid_visit_events (route_assignment_id, pid_id, vehicle_id, gps_location_id, distance_meters,
-                                speed_at_detection, detected_at, evidence_status, ambiguous, pids_in_radius)
-  SELECT ra_id, pid_id, vehicle_id, gps_id, round(dist::numeric, 2), speed, recorded_at, evidence, n >= 2, n FROM cand
+                                speed_at_detection, detected_at, evidence_status, ambiguous, pids_in_radius,
+                                gps_recorded_at, gps_latitude, gps_longitude, gps_speed)
+  SELECT ra_id, pid_id, vehicle_id, gps_id, round(dist::numeric, 2), speed, recorded_at, evidence, n >= 2, n,
+         recorded_at, round(gps_lat::numeric, 7), round(gps_lng::numeric, 7), speed FROM cand
   UNION ALL
-  SELECT ra_id, pid_id, vehicle_id, gps_id, round(dist::numeric, 2), speed, recorded_at, evidence, n >= 2, n FROM seg_cand
+  SELECT ra_id, pid_id, vehicle_id, gps_id, round(dist::numeric, 2), speed, recorded_at, evidence, n >= 2, n,
+         recorded_at, round(gps_lat::numeric, 7), round(gps_lng::numeric, 7), speed FROM seg_cand
   ON CONFLICT (route_assignment_id, pid_id, gps_location_id) DO NOTHING
   RETURNING id
 ),
@@ -152,8 +162,10 @@ late_log AS (
   RETURNING 1
 ),
 done AS (
+  -- (id, recorded_at) pkey per partition; the recorded_at bounds of the batch prune partitions at run time.
   UPDATE gps_locations SET processed_at = now()
-   WHERE id = ANY ((SELECT array_agg(id) FROM batch)::bigint[]) -- pkey index, never a full scan of history
+   WHERE id = ANY ((SELECT array_agg(id) FROM batch)::bigint[])
+     AND recorded_at >= (SELECT min(recorded_at) FROM batch) AND recorded_at <= (SELECT max(recorded_at) FROM batch)
   RETURNING id
 )
 SELECT (SELECT count(*) FROM batch)::int                       AS points,

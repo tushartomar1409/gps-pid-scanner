@@ -8,7 +8,7 @@ import { createApp } from '../../src/app.js';
 import { pool } from '../../src/config/database.js';
 import { REPORTS } from '../../src/services/reports/definitions.js';
 import { createUser, createAgency, createZone, createWard, createVehicle, bearer, uid } from '../helpers/fixtures.js';
-import { makeAssignment, track, ist } from '../helpers/detection.js';
+import { makeAssignment, track, ist, insertEvents } from '../helpers/detection.js';
 
 const D = '2034-04-10';
 const HINDI = 'मकान नं. 12, सेक्टर 7, फरीदाबाद';
@@ -62,11 +62,12 @@ beforeAll(async () => {
   await setStatus(asg2.raId, asg2.pidIds[1], 'GPS_VISIT_CANDIDATE');
   const g = await track(v1.id, [{ p: [28.5, 77.2], t: ist(D, '09:05:00') }, { p: [28.5, 77.2001], t: ist(D, '09:06:00') }, { p: [28.502, 77.2], t: ist(D, '09:40:00') }]);
   await pool.query('UPDATE gps_locations SET processed_at = now() WHERE id = ANY($1)', [g]);
-  await pool.query(
-    `INSERT INTO pid_visit_events (route_assignment_id, pid_id, vehicle_id, gps_location_id, distance_meters, detected_at, evidence_status, ambiguous, pids_in_radius) VALUES
-       ($1, $2, $3, $4, 12.4, $5, 'PROXIMITY_POINT', true, 2), ($1, $2, $3, $6, 20, $7, 'PROXIMITY_POINT', false, 1),
-       ($1, $2, $3, $8, 9, $9, 'TRACK_SEGMENT', false, 1), ($1, $10, $3, $8, 15, $9, 'TRACK_SEGMENT', false, 1)`,
-    [asg1.raId, asg1.pidIds[0], v1.id, g[0], ist(D, '09:05:00'), g[1], ist(D, '09:06:00'), g[2], ist(D, '09:40:00'), asg1.pidIds[2]]);
+  await insertEvents([
+    { raId: asg1.raId, pidId: asg1.pidIds[0], vehicleId: v1.id, gpsId: g[0], dist: 12.4, status: 'PROXIMITY_POINT', ambiguous: true, pidsInRadius: 2 },
+    { raId: asg1.raId, pidId: asg1.pidIds[0], vehicleId: v1.id, gpsId: g[1], dist: 20, status: 'PROXIMITY_POINT' },
+    { raId: asg1.raId, pidId: asg1.pidIds[0], vehicleId: v1.id, gpsId: g[2], dist: 9, status: 'TRACK_SEGMENT' },
+    { raId: asg1.raId, pidId: asg1.pidIds[2], vehicleId: v1.id, gpsId: g[2], dist: 15, status: 'TRACK_SEGMENT' },
+  ]);
 });
 
 const get = async (path, token) => request(app).get(path).set(bearer(token ?? (await admin()).token));

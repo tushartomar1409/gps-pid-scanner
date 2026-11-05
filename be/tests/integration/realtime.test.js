@@ -32,9 +32,9 @@ async function setLatest(vehicleId, lat, at = new Date()) {
     `INSERT INTO gps_locations (vehicle_id, device_id, latitude, longitude, speed, heading, recorded_at, provider)
      VALUES ($1, 'RT', $2, 77.3, 12, 90, $3, 'test') RETURNING id`, [vehicleId, lat, at])).rows[0];
   await pool.query(
-    `INSERT INTO vehicle_latest_locations (vehicle_id, gps_location_id, latitude, longitude, speed, recorded_at, provider)
-     VALUES ($1, $2, $3, 77.3, 12, $4, 'test')
-     ON CONFLICT (vehicle_id) DO UPDATE SET gps_location_id = EXCLUDED.gps_location_id, latitude = EXCLUDED.latitude, recorded_at = EXCLUDED.recorded_at`,
+    `INSERT INTO vehicle_latest_locations (vehicle_id, gps_location_id, latitude, longitude, speed, heading, recorded_at, provider)
+     VALUES ($1, $2, $3, 77.3, 12, 90, $4, 'test')
+     ON CONFLICT (vehicle_id) DO UPDATE SET gps_location_id = EXCLUDED.gps_location_id, latitude = EXCLUDED.latitude, heading = EXCLUDED.heading, recorded_at = EXCLUDED.recorded_at`,
     [vehicleId, g.id, lat, at]);
 }
 
@@ -158,6 +158,19 @@ describe('periodic re-check', () => {
     await rt.recheckUsers();
     expect((await kicked).reason).toMatch(/no longer active/);
     expect(await disconnected).toBe('io server disconnect');
+  });
+});
+
+describe('token_version (GUIDE #11 C2)', () => {
+  it('a revoked session is kicked on the next re-check and cannot reconnect with the old token', async () => {
+    const u = await createUser('AGENCY_USER', { agency_id: agencyA.id });
+    const c = connect(u.token);
+    await ready(c);
+    const kicked = next(c, 'unauthorized');
+    await pool.query('UPDATE users SET token_version = token_version + 1 WHERE id = $1', [u.user.id]);
+    await rt.recheckUsers();
+    expect((await kicked).reason).toMatch(/Session ended/);
+    expect(await connectError(connect(u.token))).toBe('unauthorized');
   });
 });
 

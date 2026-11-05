@@ -51,18 +51,18 @@ ins AS (
   INSERT INTO gps_locations (${COLS.map(([c]) => c).join(', ')})
   SELECT ${COLS.map(([c]) => c).join(', ')} FROM input
   ON CONFLICT (vehicle_id, recorded_at) DO NOTHING
-  RETURNING id, vehicle_id, latitude, longitude, speed, ignition, provider_status, recorded_at, provider
+  RETURNING id, vehicle_id, latitude, longitude, speed, heading, ignition, provider_status, recorded_at, provider
 ),
 newest AS (
   SELECT DISTINCT ON (vehicle_id) * FROM ins ORDER BY vehicle_id, recorded_at DESC
 ),
 latest AS (
   INSERT INTO vehicle_latest_locations
-    (vehicle_id, gps_location_id, latitude, longitude, speed, ignition, provider_status, recorded_at, received_at, provider)
-  SELECT vehicle_id, id, latitude, longitude, speed, ignition, provider_status, recorded_at, now(), provider FROM newest
+    (vehicle_id, gps_location_id, latitude, longitude, speed, heading, ignition, provider_status, recorded_at, received_at, provider)
+  SELECT vehicle_id, id, latitude, longitude, speed, heading, ignition, provider_status, recorded_at, now(), provider FROM newest
   ON CONFLICT (vehicle_id) DO UPDATE SET
     gps_location_id = EXCLUDED.gps_location_id, latitude = EXCLUDED.latitude, longitude = EXCLUDED.longitude,
-    speed = EXCLUDED.speed, ignition = EXCLUDED.ignition, provider_status = EXCLUDED.provider_status,
+    speed = EXCLUDED.speed, heading = EXCLUDED.heading, ignition = EXCLUDED.ignition, provider_status = EXCLUDED.provider_status,
     recorded_at = EXCLUDED.recorded_at, received_at = EXCLUDED.received_at, provider = EXCLUDED.provider
   WHERE EXCLUDED.recorded_at > vehicle_latest_locations.recorded_at   -- never move a vehicle backwards
   RETURNING vehicle_id

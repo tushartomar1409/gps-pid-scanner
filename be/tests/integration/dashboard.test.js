@@ -4,7 +4,7 @@ import request from 'supertest';
 import { createApp } from '../../src/app.js';
 import { pool } from '../../src/config/database.js';
 import { createUser, createAgency, createZone, createWard, createVehicle, createPid, bearer } from '../helpers/fixtures.js';
-import { makeAssignment, track, ist } from '../helpers/detection.js';
+import { makeAssignment, track, ist, insertEvents } from '../helpers/detection.js';
 
 const D = '2031-03-10';
 let app; let admin; let zone; let w1; let w2; let a1; let a2; let v1; let v2; let v3; let asg1; let asg2; let gpsIds;
@@ -40,10 +40,11 @@ beforeAll(async () => {
     { p: [28.5, 77.2], t: ist(D, '09:05:00') }, { p: [28.5, 77.2001], t: ist(D, '09:06:00') },
     { p: [28.5, 77.2002], t: ist(D, '09:40:00') }, { p: [28.5, 77.2003], t: ist(D, '14:10:00') }]);
   await pool.query('UPDATE gps_locations SET processed_at = now() WHERE id = ANY($1)', [gpsIds]);
-  await pool.query(
-    `INSERT INTO pid_visit_events (route_assignment_id, pid_id, vehicle_id, gps_location_id, distance_meters, detected_at, evidence_status)
-     VALUES ($1, $2, $3, $4, 5, $5, 'PROXIMITY_POINT'), ($1, $6, $3, $7, 6, $8, 'TRACK_SEGMENT'), ($1, $2, $3, $9, 7, $10, 'REJECTED_SPEED')`,
-    [asg1.raId, asg1.pidIds[0], v1.id, gpsIds[0], ist(D, '09:05:00'), asg1.pidIds[2], gpsIds[1], ist(D, '09:06:00'), gpsIds[3], ist(D, '14:10:00')]);
+  await insertEvents([
+    { raId: asg1.raId, pidId: asg1.pidIds[0], vehicleId: v1.id, gpsId: gpsIds[0], dist: 5, status: 'PROXIMITY_POINT' }, // 09:05
+    { raId: asg1.raId, pidId: asg1.pidIds[2], vehicleId: v1.id, gpsId: gpsIds[1], dist: 6, status: 'TRACK_SEGMENT' }, // 09:06
+    { raId: asg1.raId, pidId: asg1.pidIds[0], vehicleId: v1.id, gpsId: gpsIds[3], dist: 7, status: 'REJECTED_SPEED' }, // 14:10
+  ]);
 });
 
 const get = (path, token = admin.token) => request(app).get(path).set(bearer(token));

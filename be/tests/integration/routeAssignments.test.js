@@ -3,6 +3,7 @@ import request from 'supertest';
 import { createApp } from '../../src/app.js';
 import { pool } from '../../src/config/database.js';
 import { todayInTz, addDays } from '../../src/utils/time.js';
+import { insertEvents } from '../helpers/detection.js';
 import {
   createUser, createAgency, createVehicle, createRouteWithPids, createPid, addRoutePids, bearer,
 } from '../helpers/fixtures.js';
@@ -25,9 +26,7 @@ async function addVisitEvent(raId, pidId, vehicleId) {
   const g = (await pool.query(
     `INSERT INTO gps_locations (vehicle_id, device_id, latitude, longitude, recorded_at) VALUES ($1, 'D', 28.4, 77.3, now()) RETURNING id`,
     [vehicleId])).rows[0];
-  await pool.query(
-    `INSERT INTO pid_visit_events (route_assignment_id, pid_id, vehicle_id, gps_location_id, distance_meters, detected_at, evidence_status)
-     VALUES ($1, $2, $3, $4, 10, now(), 'PROXIMITY_POINT')`, [raId, pidId, vehicleId, g.id]);
+  await insertEvents([{ raId, pidId, vehicleId, gpsId: g.id, dist: 10, status: 'PROXIMITY_POINT' }]);
 }
 
 describe('create', () => {

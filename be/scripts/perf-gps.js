@@ -107,6 +107,36 @@ try {
   const histRows = (await pool.query(hist.text, hist.values)).rows;
   console.log(`\n== vehicle-history: total_in_window ${histRows[0]?.total}, returned ${histRows.length} (max_points 500), first ${histRows[0]?.recorded_at.toISOString()}, last ${histRows.at(-1)?.recorded_at.toISOString()}`);
   console.log(await explain(hist));
+
+  // ---- Storage per row (GUIDE #11 A1): one day at 30 s for 200 vehicles into the current month's partition,
+  // realistic columns (speed, heading, ignition, provider, processed), raw_payload off (GPS_STORE_RAW=false).
+  const nV = 200;
+  t0 = performance.now();
+  await pool.query(`INSERT INTO gps_locations (vehicle_id, device_id, latitude, longitude, speed, heading, ignition, provider_status, recorded_at, received_at, processed_at, provider)
+    SELECT v.id, v.gps_device_id, 28.3 + random() * 0.3, 77.1 + random() * 0.3, round((random() * 40)::numeric, 2), round((random() * 359)::numeric, 2),
+           random() > 0.2, 'OK', $1::timestamptz - interval '2 days' + make_interval(secs => g * 30),
+           $1::timestamptz - interval '2 days' + make_interval(secs => g * 30 + 4), now(), 'perf'
+      FROM (SELECT id, gps_device_id FROM vehicles ORDER BY id LIMIT ${nV}) v, generate_series(0, 2879) g
+    ON CONFLICT DO NOTHING`, [new Date()]);
+  await pool.query('VACUUM ANALYZE gps_locations');
+  const { rows: sz } = await pool.query(`
+    SELECT p.name, (SELECT count(*) FROM gps_locations g WHERE g.tableoid = (quote_ident(current_schema()) || '.' || p.name)::regclass) AS rows,
+           pg_relation_size((quote_ident(current_schema()) || '.' || p.name)::regclass) AS heap,
+           pg_indexes_size((quote_ident(current_schema()) || '.' || p.name)::regclass) AS idx,
+           pg_total_relation_size((quote_ident(current_schema()) || '.' || p.name)::regclass) AS total
+      FROM gps_partitions() p ORDER BY total DESC LIMIT 1`);
+  const s = sz[0];
+  const perRow = (b) => Number(b) / Number(s.rows);
+  const month = 2000 * 2880 * 30;
+  console.log(`\n== Storage (${Number(s.rows).toLocaleString()} rows in ${s.name}, inserted in ${ms(t0)} ms)`);
+  console.table([{
+    heap_B_per_row: Math.round(perRow(s.heap)), index_B_per_row: Math.round(perRow(s.idx)), total_B_per_row: Math.round(perRow(s.total)),
+    rows_per_month_2000v_30s: month.toLocaleString(), GiB_per_month: Math.round((perRow(s.total) * month) / 2 ** 30 * 10) / 10,
+    GiB_180_days: Math.round((perRow(s.total) * month * 6) / 2 ** 30 * 10) / 10,
+  }]);
+  const { rows: ix } = await pool.query(`SELECT indexrelid::regclass::text AS idx, pg_relation_size(indexrelid) AS b FROM pg_index
+                                          WHERE indrelid = (quote_ident(current_schema()) || '.' || $1)::regclass ORDER BY 2 DESC`, [s.name]);
+  console.log(ix.map((r) => `  ${r.idx.split('.').pop()}: ${Math.round(Number(r.b) / Number(s.rows))} B/row`).join('\n'));
 } catch (err) {
   console.error('PERF RUN FAILED:', err);
   process.exitCode = 1;

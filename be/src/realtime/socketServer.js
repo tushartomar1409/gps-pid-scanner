@@ -56,7 +56,9 @@ export function attachRealtime(httpServer, {
       const payload = verifyToken(token);
       const u = await userRepository.findAuthById(Number(payload.sub));
       if (!u || u.status !== 'ACTIVE') return next(new Error('unauthorized'));
+      if ((payload.tv ?? 0) !== u.token_version) return next(new Error('unauthorized')); // revoked session (GUIDE #11 C2)
       socket.data.user = u;
+      socket.data.tv = payload.tv ?? 0;
       return next();
     } catch {
       return next(new Error('unauthorized'));
@@ -69,16 +71,17 @@ export function attachRealtime(httpServer, {
     socket.emit('ready', { room });
   });
 
-  // ---- periodic re-check: one query for all connected users; deactivated -> disconnect
+  // ---- periodic re-check: one query for all connected users; deactivated or revoked session -> disconnect
   async function recheckUsers() {
     const sockets = await io.fetchSockets();
     const ids = [...new Set(sockets.map((s) => s.data.user.id))];
     if (!ids.length) return;
-    const { rows } = await db.query("SELECT id FROM users WHERE id = ANY($1::bigint[]) AND status = 'ACTIVE'", [ids]);
-    const active = new Set(rows.map((r) => Number(r.id)));
+    const { rows } = await db.query("SELECT id, token_version FROM users WHERE id = ANY($1::bigint[]) AND status = 'ACTIVE'", [ids]);
+    const active = new Map(rows.map((r) => [Number(r.id), Number(r.token_version)]));
     for (const s of sockets) {
-      if (!active.has(Number(s.data.user.id))) {
-        s.emit('unauthorized', { reason: 'User is no longer active' });
+      const tv = active.get(Number(s.data.user.id));
+      if (tv === undefined || tv !== (s.data.tv ?? 0)) {
+        s.emit('unauthorized', { reason: tv === undefined ? 'User is no longer active' : 'Session ended (signed out everywhere or password changed)' });
         s.disconnect(true);
       }
     }
@@ -121,8 +124,8 @@ export function attachRealtime(httpServer, {
     if (!vehicleIds?.length) return;
     const offlineS = Number(await getSetting('gps.offline_after_seconds', 300)) || 300;
     const { rows } = await db.query(
-      `SELECT l.vehicle_id, l.latitude AS lat, l.longitude AS lng, l.speed, l.ignition, g.heading, l.recorded_at
-         FROM vehicle_latest_locations l LEFT JOIN gps_locations g ON g.id = l.gps_location_id
+      `SELECT l.vehicle_id, l.latitude AS lat, l.longitude AS lng, l.speed, l.ignition, l.heading, l.recorded_at
+         FROM vehicle_latest_locations l
         WHERE l.vehicle_id = ANY($1::int[])`, [vehicleIds]);
     const scopes = await vehicleScopes(rows.map((r) => Number(r.vehicle_id)));
     for (const r of rows) {

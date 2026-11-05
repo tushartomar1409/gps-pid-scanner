@@ -24,6 +24,8 @@ export const SETTING_DEFS = {
   'gps.offline_after_seconds': { schema: z.number().int().min(30).max(86_400), default: 300 },
   'gps.poll_interval_seconds': { schema: z.number().int().min(5).max(3600), default: 60 },
   'gps.min_points_for_data_available': { schema: z.number().int().min(0).max(1000), default: 5 },
+  // Raw GPS retention (GUIDE #11 A): ≥ 35 days so the current + previous month are never dropped.
+  'gps.retention_days': { schema: z.number().int().min(35).max(3650), default: 180 },
   'geo.service_area_bbox': {
     schema: z.strictObject({ min_lat: z.number().min(-90).max(90), max_lat: z.number().min(-90).max(90), min_lng: z.number().min(-180).max(180), max_lng: z.number().min(-180).max(180) })
       .refine((b) => b.min_lat < b.max_lat && b.min_lng < b.max_lng, 'min must be < max'),

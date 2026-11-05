@@ -81,8 +81,8 @@ try {
   // One GPS point per vehicle + events for 30 % of PIDs (so the evidence LATERAL does real work).
   await pool.query(`INSERT INTO gps_locations (vehicle_id, device_id, latitude, longitude, speed, recorded_at, received_at, provider, processed_at)
     SELECT id, gps_device_id, 28.4, 77.3, 10, '${DATE}T04:00:00Z', '${DATE}T04:00:05Z', 'perf', now() FROM vehicles`);
-  await pool.query(`INSERT INTO pid_visit_events (route_assignment_id, pid_id, vehicle_id, gps_location_id, distance_meters, detected_at, evidence_status)
-    SELECT s.route_assignment_id, s.pid_id, s.vehicle_id, g.id, 10, g.recorded_at, CASE WHEN s.pid_id % 2 = 0 THEN 'PROXIMITY_POINT' ELSE 'TRACK_SEGMENT' END
+  await pool.query(`INSERT INTO pid_visit_events (route_assignment_id, pid_id, vehicle_id, gps_location_id, distance_meters, detected_at, evidence_status, gps_recorded_at, gps_latitude, gps_longitude, gps_speed)
+    SELECT s.route_assignment_id, s.pid_id, s.vehicle_id, g.id, 10, g.recorded_at, CASE WHEN s.pid_id % 2 = 0 THEN 'PROXIMITY_POINT' ELSE 'TRACK_SEGMENT' END, g.recorded_at, g.latitude, g.longitude, g.speed
       FROM pid_daily_status s JOIN gps_locations g ON g.vehicle_id = s.vehicle_id WHERE s.pid_id % 10 < 3`);
   await pool.query('ANALYZE');
   const n = (await pool.query('SELECT count(*)::int n FROM pid_daily_status')).rows[0].n;
