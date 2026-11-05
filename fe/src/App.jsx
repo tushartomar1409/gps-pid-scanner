@@ -28,6 +28,8 @@ const HistoryPage = lazy(() => import('./pages/history/HistoryPage.jsx'));
 const DetectionSettingsPage = lazy(() => import('./pages/settings/DetectionSettingsPage.jsx'));
 const GpsIntegrationPage = lazy(() => import('./pages/settings/GpsIntegrationPage.jsx'));
 const ActivityLogsPage = lazy(() => import('./pages/settings/ActivityLogsPage.jsx'));
+const ReportPage = lazy(() => import('./pages/reports/ReportPage.jsx'));
+const ReportArchivePage = lazy(() => import('./pages/reports/ReportArchivePage.jsx'));
 
 const page = (el) => <Suspense fallback={<PageSkeleton />}>{el}</Suspense>;
 const guard = (permission, element, role) => <ProtectedRoute permission={permission} role={role}>{page(element)}</ProtectedRoute>;
@@ -58,6 +60,8 @@ export const routes = [
               { path: 'live', element: guard('gps:read', <LiveTrackingPage />) },
               { path: 'coverage', element: guard('assignments:read', <CoverageMapPage />) },
               { path: 'history', element: guard('gps:read', <HistoryPage />) },
+              { path: 'reports/archive', element: guard(null, <ReportArchivePage />, ['SUPER_ADMIN', 'DEPARTMENT_ADMIN']) },
+              { path: 'reports/:name', element: guard('reports:read', <ReportPage />) },
               { path: 'pids', element: guard('pids:read', <PidsPage />) },
               { path: 'pids/import', element: guard('pids:write', <PidImportPage />) },
               { path: 'routes', element: guard('routes:read', <RoutesPage />) },

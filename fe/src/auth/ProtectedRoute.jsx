@@ -23,7 +23,8 @@ export function ProtectedRoute({ permission, role, children }) {
     const redirect = encodeURIComponent(location.pathname + location.search);
     return <Navigate to={`/login?redirect=${redirect}`} replace />;
   }
-  if ((permission && !hasPermission(user, permission)) || (role && user.role_key !== role)) {
+  const roles = role ? [].concat(role) : null;
+  if ((permission && !hasPermission(user, permission)) || (roles && !roles.includes(user.role_key))) {
     return <ErrorState title="Access denied" message="You do not have permission to view this page." />;
   }
   return children ?? <Outlet />;

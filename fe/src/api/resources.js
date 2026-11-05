@@ -92,6 +92,41 @@ export const detectionApi = {
   reprocess: (body) => api.post('/detection/reprocess', body, { timeout: 180_000 }).then(unwrap),
 };
 
+/** Filename from `Content-Disposition: attachment; filename="x.xlsx"` (sanitised server-side too). */
+export function filenameFromDisposition(header, fallback) {
+  const m = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(header || '');
+  const name = m ? decodeURIComponent(m[1]) : fallback;
+  return String(name).replace(/[\\/]/g, '_');
+}
+
+/** Error bodies of blob requests arrive as a Blob: read the JSON envelope so messages still show. */
+async function blobError(err) {
+  const data = err?.response?.data;
+  if (data instanceof Blob) {
+    try {
+      err.response.data = JSON.parse(await data.text());
+    } catch {
+      /* not JSON: keep as is */
+    }
+  }
+  throw err;
+}
+
+const downloadFile = (url, params, fallbackName) =>
+  api
+    .get(url, { params: cleanParams(params), responseType: 'blob', timeout: 300_000 })
+    .then((res) => ({ blob: res.data, filename: filenameFromDisposition(res.headers?.['content-disposition'], fallbackName) }))
+    .catch(blobError);
+
+export const reportsApi = {
+  preview: (name, params, { signal } = {}) => api.get(`/reports/${name}`, { params: cleanParams(params), signal, timeout: 60_000 }).then(unwrap),
+  /** format: xlsx | pdf | csv -> { blob, filename } */
+  export: (name, params, format) => downloadFile(`/reports/${name}`, { ...params, page: undefined, limit: undefined, format }, `${name}.${format}`),
+  trackExport: (params, format = 'csv') => downloadFile('/reports/vehicle-tracking', { ...params, format }, `vehicle-tracking.${format}`),
+  archive: (params, { signal } = {}) => api.get('/reports/archive', { params: cleanParams(params), signal }).then(unwrap),
+  archiveDownload: (id) => downloadFile(`/reports/archive/${id}/download`, {}, `report-${id}.xlsx`),
+};
+
 export const activityLogsApi = {
   list: (params, { signal } = {}) => api.get('/activity-logs', { params: cleanParams(params), signal }).then(unwrap),
 };

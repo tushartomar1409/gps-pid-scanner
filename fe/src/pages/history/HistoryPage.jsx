@@ -1,7 +1,8 @@
 // Historical GPS tracking + playback (GUIDE #9 E, flow §14.6).
 import { useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { CircleMarker, Polyline, Tooltip } from 'react-leaflet';
-import { assignmentsApi, gpsApi } from '../../api/resources.js';
+import { assignmentsApi, gpsApi, reportsApi } from '../../api/resources.js';
+import { ExportButtons } from '../reports/ReportPage.jsx';
 import { useApiQuery } from '../../hooks/useApiQuery.js';
 import { usePermission } from '../../auth/usePermission.js';
 import { usePermittedLookups, useUrlFilters } from '../../components/MonitoringFilters.jsx';
@@ -120,6 +121,12 @@ export default function HistoryPage() {
             {q.loading && <div className="absolute right-3 top-3 z-[400] rounded bg-white/90 px-2 py-1 shadow"><Spinner /></div>}
           </div>
           {q.data && !points.length && <p className="text-sm text-slate-600">No GPS points in this window.</p>}
+          {can('reports:export') && q.data && points.length > 0 && (
+            <div className="flex justify-end">
+              <ExportButtons title="Export track (full resolution):" formats={['csv', 'xlsx']}
+                onExport={(format) => reportsApi.trackExport({ vehicle_id: submitted.vehicle_id, date: submitted.date, start: submitted.start || '00:00', end: submitted.end || '23:59' }, format)} />
+            </div>
+          )}
           {q.data?.downsampled && (
             <p className="text-xs text-slate-500" role="status">Downsampled: showing {points.length} of {q.data.total_in_window} points.</p>
           )}

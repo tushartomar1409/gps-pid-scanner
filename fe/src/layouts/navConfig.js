@@ -16,6 +16,17 @@ export const NAV_SECTIONS = [
     ],
   },
   {
+    title: 'Reports',
+    items: [
+      { to: '/reports/daily-coverage', label: 'Daily PID Coverage', permission: 'reports:read' },
+      { to: '/reports/vehicle-wise', label: 'Vehicle-wise', permission: 'reports:read' },
+      { to: '/reports/agency-wise', label: 'Agency-wise', permission: 'reports:read' },
+      { to: '/reports/ward-wise', label: 'Ward-wise', permission: 'reports:read' },
+      { to: '/reports/missed-pids', label: 'Missed PIDs', permission: 'reports:read' },
+      { to: '/reports/archive', label: 'Report Archive', permission: null, role: ['SUPER_ADMIN', 'DEPARTMENT_ADMIN'] },
+    ],
+  },
+  {
     title: 'Operations',
     items: [
       { to: '/pids', label: 'PIDs', permission: 'pids:read', end: true },

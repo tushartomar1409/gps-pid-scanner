@@ -5,7 +5,7 @@ import { NAV_SECTIONS } from './navConfig.js';
 /** item visible? permission, optional role, optional hideIf (hidden when the user HAS that permission). */
 export function itemVisible(user, i) {
   if (!hasPermission(user, i.permission)) return false;
-  if (i.role && user?.role_key !== i.role) return false;
+  if (i.role && ![].concat(i.role).includes(user?.role_key)) return false;
   if (i.hideIf && hasPermission(user, i.hideIf)) return false;
   return true;
 }

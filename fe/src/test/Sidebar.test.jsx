@@ -23,6 +23,7 @@ describe('Sidebar', () => {
     renderSidebar({ permissions: ['*'], role_key: 'SUPER_ADMIN' });
     expect(screen.getAllByRole('link').map((a) => a.textContent)).toEqual([
       'Dashboard', 'Live Tracking', 'Coverage Map', 'GPS History',
+      'Daily PID Coverage', 'Vehicle-wise', 'Agency-wise', 'Ward-wise', 'Missed PIDs', 'Report Archive',
       'PIDs', 'PID Import', 'Routes', 'Assignments', 'Zones', 'Wards', 'Agencies', 'Vehicles',
       'Users', 'Detection Settings', 'GPS Integration', 'Activity Logs',
     ]);
@@ -35,12 +36,15 @@ describe('Sidebar', () => {
     expect(links).toContain('GPS Integration');
     expect(links).not.toContain('Detection Settings');
     expect(links).not.toContain('Activity Logs');
+    expect(links).toContain('Report Archive'); // archive: SUPER_ADMIN or DEPARTMENT_ADMIN
   });
 
   it('monitoring section for a dashboard + GPS reader (agency-style permissions)', () => {
-    renderSidebar({ permissions: ['dashboard:read', 'gps:read', 'assignments:read'], role_key: 'AGENCY_USER' });
+    renderSidebar({ permissions: ['dashboard:read', 'gps:read', 'assignments:read', 'reports:read'], role_key: 'AGENCY_USER' });
     expect(screen.getAllByRole('link').map((a) => a.textContent)).toEqual([
-      'Dashboard', 'Live Tracking', 'Coverage Map', 'GPS History', 'Assignments', 'GPS Integration',
+      'Dashboard', 'Live Tracking', 'Coverage Map', 'GPS History',
+      'Daily PID Coverage', 'Vehicle-wise', 'Agency-wise', 'Ward-wise', 'Missed PIDs', // no archive: unscoped files
+      'Assignments', 'GPS Integration',
     ]);
     expect(screen.getByText('Monitoring')).toBeInTheDocument();
   });
