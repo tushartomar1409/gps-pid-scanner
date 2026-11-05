@@ -157,7 +157,8 @@ describe('deriveProviderState', () => {
     expect(deriveProviderState([run('FAILED', 1), run('FAILED', 2), run('FAILED', 3), run('SUCCESS', 4)], opts)).toMatchObject({ state: 'DOWN', consecutive_failures: 3 });
     expect(deriveProviderState([run('FAILED', 1), run('SUCCESS', 2)], opts)).toMatchObject({ state: 'UP', consecutive_failures: 1 });
     expect(deriveProviderState([run('SUCCESS', 6)], opts).state).toBe('DOWN'); // no success within 5 intervals
-    expect(deriveProviderState([], opts)).toMatchObject({ state: 'DOWN', reason: 'No successful run yet', last_run: null });
+    expect(deriveProviderState([], opts)).toMatchObject({ state: 'UNKNOWN', reason: 'No poll has run yet', last_run: null });
+    expect(deriveProviderState([run('FAILED', 1)], opts)).toMatchObject({ state: 'DOWN', reason: 'No successful run yet' }); // polled but never succeeded
     expect(deriveProviderState([{ outcome: 'RUNNING', started_at: new Date(now) }, run('SUCCESS', 1)], opts).state).toBe('UP'); // in-flight ignored
   });
 });

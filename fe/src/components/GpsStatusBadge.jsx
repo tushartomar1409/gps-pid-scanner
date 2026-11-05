@@ -9,6 +9,7 @@ export const STATE_STYLE = {
   DOWN: { dot: 'bg-red-600', label: 'GPS down' },
   UNKNOWN: { dot: 'bg-slate-400', label: 'GPS status unknown' },
 };
+const NEVER_POLLED = { dot: 'bg-slate-400', label: 'GPS not polled yet' };
 
 export function GpsStatusBadge({ intervalMs = 60_000 }) {
   const [status, setStatus] = useState(null);
@@ -33,7 +34,8 @@ export function GpsStatusBadge({ intervalMs = 60_000 }) {
   }, [intervalMs]);
 
   const state = failed || !status ? 'UNKNOWN' : status.state;
-  const s = STATE_STYLE[state] || STATE_STYLE.UNKNOWN;
+  // Server UNKNOWN = never polled (grey, not an outage); a failed status call is also grey but worded differently.
+  const s = !failed && status?.state === 'UNKNOWN' ? NEVER_POLLED : STATE_STYLE[state] || STATE_STYLE.UNKNOWN;
   const tooltip = failed
     ? 'Could not load GPS provider status'
     : status

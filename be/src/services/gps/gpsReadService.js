@@ -115,7 +115,8 @@ async function assertVehicleVisible(vehicleId, scope, executor) {
 
 /**
  * Provider status state machine.
- *   DOWN     — ≥ 3 consecutive FAILED runs, or no successful run within 5 × interval (incl. never)
+ *   UNKNOWN  — no finished run at all (never polled)
+ *   DOWN     — ≥ 3 consecutive FAILED runs, or no successful run within 5 × interval
  *   DEGRADED — last finished run PARTIAL, or > 20 % of its received points rejected
  *   UP       — otherwise
  */
@@ -131,7 +132,8 @@ export function deriveProviderState(runs, { intervalMs, now = Date.now() }) {
   const last = finished[0] || null;
   let state = 'UP';
   let reason = null;
-  if (consecutiveFailures >= 3) [state, reason] = ['DOWN', `${consecutiveFailures} consecutive failed runs`];
+  if (!finished.length) [state, reason] = ['UNKNOWN', 'No poll has run yet']; // grey, not an outage (GUIDE #7)
+  else if (consecutiveFailures >= 3) [state, reason] = ['DOWN', `${consecutiveFailures} consecutive failed runs`];
   else if (!lastSuccessAt || now - lastSuccessAt.getTime() > 5 * intervalMs) {
     [state, reason] = ['DOWN', lastSuccessAt ? 'No successful run within 5 poll intervals' : 'No successful run yet'];
   } else if (last && (last.outcome === 'PARTIAL' || (last.records_received > 0 && last.records_rejected / last.records_received > 0.2))) {

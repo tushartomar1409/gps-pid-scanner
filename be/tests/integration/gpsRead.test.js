@@ -128,7 +128,7 @@ describe('provider status + poll-now', () => {
     const name = env.GPS_PROVIDER;
     await pool.query('DELETE FROM gps_poll_runs WHERE provider = $1', [name]);
     const res0 = await request(app).get('/api/gps/provider-status').set(bearer(admin.token));
-    expect(res0.body.data).toMatchObject({ provider: name, state: 'DOWN', last_run: null });
+    expect(res0.body.data).toMatchObject({ provider: name, state: 'UNKNOWN', last_run: null });
 
     await pool.query(
       `INSERT INTO gps_poll_runs (provider, started_at, finished_at, outcome, records_received, records_saved)

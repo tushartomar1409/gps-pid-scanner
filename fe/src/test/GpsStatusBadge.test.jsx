@@ -27,6 +27,15 @@ describe('GpsStatusBadge', () => {
     expect(screen.getByRole('status').querySelector('.bg-red-600')).not.toBeNull();
   });
 
+  it('shows a grey "not polled yet" badge when the server reports UNKNOWN (never polled)', async () => {
+    gpsApi.providerStatus.mockResolvedValueOnce(status('UNKNOWN', { reason: 'No poll has run yet', last_success_at: null }));
+    render(<GpsStatusBadge />);
+    await act(async () => {});
+    expect(screen.getByRole('status')).toHaveTextContent('GPS not polled yet');
+    expect(screen.getByRole('status').querySelector('.bg-slate-400')).not.toBeNull();
+    expect(screen.getByRole('status').getAttribute('title')).toMatch(/Last success: never/);
+  });
+
   it('shows DEGRADED in amber and UNKNOWN when the status call fails', async () => {
     gpsApi.providerStatus.mockResolvedValueOnce(status('DEGRADED')).mockRejectedValueOnce(new Error('network'));
     render(<GpsStatusBadge intervalMs={1000} />);
