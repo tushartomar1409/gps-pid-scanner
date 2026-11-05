@@ -57,20 +57,21 @@ export async function runDailyArchive({
       return { status: 'locked' };
     }
     const retention = await applyRetention({ db, dir, today, retentionDays, logger });
+    const regenerated = await regenerateFinalized({ db, dir, logger });
 
     const { rows: done } = await db.query(
       "SELECT report_type FROM report_runs WHERE operational_date = $1 AND format = 'xlsx' AND status = 'SUCCESS'", [opDate]);
     const todo = ARCHIVE_TYPES.filter((t) => !done.some((d) => d.report_type === t));
     if (!todo.length) {
       await lockClient.query('COMMIT');
-      return { status: 'up_to_date', operational_date: opDate, retention };
+      return { status: 'up_to_date', operational_date: opDate, retention, regenerated };
     }
 
     const { rows: [o] } = await db.query(
       "SELECT count(*)::int AS open FROM route_assignments WHERE operational_date = $1 AND finalized_at IS NULL AND status IN ('PLANNED', 'ACTIVE')", [opDate]);
     if (o.open > 0 && time < waitUntil) {
       await lockClient.query('COMMIT');
-      return { status: 'waiting', operational_date: opDate, open_assignments: o.open, retry_until: waitUntil, retention };
+      return { status: 'waiting', operational_date: opDate, open_assignments: o.open, retry_until: waitUntil, retention, regenerated };
     }
     const finalized = o.open === 0;
 
@@ -95,13 +96,55 @@ export async function runDailyArchive({
     /* eslint-enable no-await-in-loop */
     await lockClient.query('COMMIT');
     if (!finalized) logger.warn({ opDate, open: o.open }, 'Daily reports generated before every assignment was finalized');
-    return { status: 'done', operational_date: opDate, finalized, results, retention };
+    return { status: 'done', operational_date: opDate, finalized, results, retention, regenerated };
   } catch (err) {
     await lockClient.query('ROLLBACK').catch(() => {});
     throw err;
   } finally {
     lockClient.release();
   }
+}
+
+/**
+ * GUIDE #11 answer 1(c): a day archived before it was fully finalized (finalized=false) is regenerated once
+ * every assignment of that day is finalized. The new file gets a NEW name; the run row is swapped in ONE
+ * statement (path, size, rows, finalized=true); only then is the old file deleted. On failure the old row
+ * and file stay as they were. Rows with finalized=true are never touched automatically.
+ */
+async function regenerateFinalized({ db, dir, logger }) {
+  const { rows: stale } = await db.query(
+    `SELECT rr.id, rr.report_type, rr.operational_date::text AS d, rr.file_path
+       FROM report_runs rr
+      WHERE rr.status = 'SUCCESS' AND rr.format = 'xlsx' AND rr.finalized = false
+        AND NOT EXISTS (SELECT 1 FROM route_assignments ra WHERE ra.operational_date = rr.operational_date
+                           AND ra.finalized_at IS NULL AND ra.status IN ('PLANNED', 'ACTIVE'))
+      ORDER BY rr.operational_date, rr.report_type`);
+  const out = [];
+  /* eslint-disable no-await-in-loop -- one report at a time */
+  for (const r of stale) {
+    const rel = path.posix.join(r.d.slice(0, 4), r.d.slice(5, 7), `${r.report_type}_${r.d}_final.xlsx`);
+    const abs = safeArchivePath(rel, dir);
+    try {
+      const { rows, size } = await writeReportFile(r.report_type, { date: r.d }, { unrestricted: true }, 'xlsx', abs);
+      const { rowCount } = await db.query(
+        `UPDATE report_runs SET file_path = $2, row_count = $3, size_bytes = $4, finalized = true, finished_at = now(), error = NULL
+          WHERE id = $1 AND finalized = false AND status = 'SUCCESS'`, [r.id, rel, rows, size]);
+      if (!rowCount) { // the row changed meanwhile: keep it, drop our file
+        await fs.promises.rm(abs, { force: true });
+        continue;
+      }
+      const old = safeArchivePath(r.file_path, dir);
+      if (old && old !== abs) {
+        await fs.promises.rm(old, { force: true }).catch((err) => logger.warn({ err, file: r.file_path }, 'Could not delete superseded report file'));
+      }
+      out.push({ id: r.id, type: r.report_type, operational_date: r.d, rows });
+    } catch (err) {
+      logger.error({ err, id: r.id }, 'Regenerating a finalized day failed; the earlier file is kept');
+      await fs.promises.rm(abs, { force: true }).catch(() => {});
+    }
+  }
+  /* eslint-enable no-await-in-loop */
+  return out;
 }
 
 async function applyRetention({ db, dir, today, retentionDays, logger }) {

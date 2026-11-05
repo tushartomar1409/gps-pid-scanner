@@ -67,6 +67,25 @@ describe('runDailyArchive', () => {
     expect(flags).toEqual([{ finalized: false }]);
   });
 
+  it('a "not finalized" day is regenerated once finalized: new file, row swapped, old file deleted; finalized rows untouched', async () => {
+    const before = (await pool.query('SELECT id, report_type, file_path FROM report_runs WHERE operational_date = $1 ORDER BY report_type', [OP2])).rows;
+    const okBefore = (await pool.query('SELECT id, file_path, finished_at FROM report_runs WHERE operational_date = $1 ORDER BY id', [OP])).rows;
+    // still open: nothing regenerated
+    expect((await runDailyArchive({ now: ist('2035-06-21', '12:30:00'), logger: silent })).regenerated).toEqual([]);
+    await pool.query("UPDATE route_assignments SET status = 'COMPLETED', finalized_at = now() WHERE operational_date = $1", [OP2]);
+    const r = await runDailyArchive({ now: ist('2035-06-21', '15:00:00'), logger: silent });
+    expect(r.regenerated.map((x) => x.type).sort()).toEqual([...ARCHIVE_TYPES].sort());
+    const after = (await pool.query('SELECT id, report_type, file_path, finalized, status FROM report_runs WHERE operational_date = $1 ORDER BY report_type', [OP2])).rows;
+    expect(after.map((x) => x.id)).toEqual(before.map((x) => x.id)); // same rows, swapped in place (no duplicates)
+    for (const [i, row] of after.entries()) {
+      expect(row).toMatchObject({ finalized: true, status: 'SUCCESS', file_path: `2035/06/${row.report_type}_${OP2}_final.xlsx` });
+      expect(fs.existsSync(path.join(dir, row.file_path))).toBe(true);
+      expect(fs.existsSync(path.join(dir, before[i].file_path))).toBe(false); // superseded file removed
+    }
+    expect((await pool.query('SELECT id, file_path, finished_at FROM report_runs WHERE operational_date = $1 ORDER BY id', [OP])).rows).toEqual(okBefore);
+    expect((await runDailyArchive({ now: ist('2035-06-21', '16:00:00'), logger: silent })).regenerated).toEqual([]); // idempotent
+  });
+
   it('retention deletes old runs and their files (only inside REPORTS_DIR)', async () => {
     const rel = '2035/01/ward-wise_2035-01-01.xlsx';
     fs.mkdirSync(path.join(dir, '2035/01'), { recursive: true });
