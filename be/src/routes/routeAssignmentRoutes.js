@@ -30,6 +30,9 @@ export function createRouteAssignmentRoutes() {
     const data = await svc.get(req.valid.params.id, req.valid.query, req.scope);
     sendSuccess(res, { message: 'Route assignment fetched successfully', data });
   });
+  router.get('/:id/map-pids', read, validate({ params: idParam }), async (req, res) => {
+    sendSuccess(res, { message: 'Assignment PIDs for map', data: await svc.mapPids(req.valid.params.id, req.scope) });
+  });
   router.get('/:id/comparison', read, validate({ params: idParam }), async (req, res) => {
     sendSuccess(res, { message: 'Route comparison', data: await compareAssignment(req.valid.params.id, req.scope) });
   });

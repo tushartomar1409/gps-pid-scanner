@@ -54,9 +54,9 @@ describe('GET /api/dashboard/summary', () => {
     expect(res.status).toBe(200);
     expect(res.body.data).toMatchObject({
       date: D,
-      total_vehicles: 3, active_vehicles: 1, offline_vehicles: 1, online_now: 0,
+      total_vehicles: 2, active_vehicles: 1, offline_vehicles: 1, online_now: 0, // v3 MAINTENANCE not counted
       total_registered_pids: 8, assigned_pids: 7,
-      gps_confirmed_pids: 2, gps_candidate_pids: 1, gps_detected_pids: 3, gps_unavailable_pids: 1, remaining_pids: 5,
+      gps_confirmed_pids: 2, gps_candidate_pids: 1, gps_detected_pids: 3, gps_unavailable_pids: 1, remaining_pids: 5, remaining_undetected_pids: 4,
       gps_confirmed_coverage_pct: 28.6, gps_visit_detected_pct: 42.9,
     });
     expect(res.body.data.disclaimer).toMatch(/does not prove that garbage was collected/);
@@ -67,7 +67,7 @@ describe('GET /api/dashboard/summary', () => {
     const ws = await createUser('WARD_SUPERVISOR', { zone_id: zone.id, ward_id: w1.id });
     const res = await get(`/api/dashboard/summary?date=${D}`, ws.token);
     expect(res.body.data).toMatchObject({
-      total_vehicles: 2, active_vehicles: 1, offline_vehicles: 0, total_registered_pids: 4,
+      total_vehicles: 1, active_vehicles: 1, offline_vehicles: 0, total_registered_pids: 4, remaining_undetected_pids: 1,
       assigned_pids: 4, gps_confirmed_pids: 2, gps_detected_pids: 3, gps_confirmed_coverage_pct: 50, gps_visit_detected_pct: 75,
     });
   });
@@ -82,8 +82,8 @@ describe('grouped dashboards', () => {
   it('ward-coverage and zone-coverage', async () => {
     const wards = (await get(`/api/dashboard/ward-coverage?date=${D}&zone_id=${zone.id}`)).body.data.groups;
     const byId = Object.fromEntries(wards.map((g) => [g.group_id, g]));
-    expect(byId[w1.id]).toMatchObject({ assigned: 4, confirmed: 2, candidate: 1, unavailable: 0, remaining: 2, confirmed_pct: 50, detected_pct: 75 });
-    expect(byId[w2.id]).toMatchObject({ assigned: 3, confirmed: 0, candidate: 0, unavailable: 1, remaining: 3, confirmed_pct: 0, detected_pct: 0 });
+    expect(byId[w1.id]).toMatchObject({ assigned: 4, confirmed: 2, candidate: 1, unavailable: 0, remaining: 2, remaining_undetected: 1, confirmed_pct: 50, detected_pct: 75 });
+    expect(byId[w2.id]).toMatchObject({ assigned: 3, confirmed: 0, candidate: 0, unavailable: 1, remaining: 3, remaining_undetected: 3, confirmed_pct: 0, detected_pct: 0 });
     const zones = (await get(`/api/dashboard/zone-coverage?date=${D}&zone_id=${zone.id}`)).body.data.groups;
     expect(zones).toEqual([expect.objectContaining({ group_id: zone.id, assigned: 7, confirmed: 2, candidate: 1, remaining: 5, confirmed_pct: 28.6, detected_pct: 42.9 })]);
   });

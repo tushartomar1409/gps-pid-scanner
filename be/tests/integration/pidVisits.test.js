@@ -97,7 +97,11 @@ describe('settings admin + reprocess API', () => {
     await request(app).put('/api/settings/detection.radius_m').set(bearer(admin.token)).send({ value: 30 });
 
     const list = await request(app).get('/api/settings').set(bearer(admin.token));
-    expect(list.body.data.find((r) => r.setting_key === 'detection.radius_m').editable).toBe(true);
+    expect(list.body.data.find((r) => r.setting_key === 'detection.radius_m')).toMatchObject({
+      editable: true, default: 30, schema: { type: 'number', minimum: 5, maximum: 200 },
+    });
+    expect(list.body.data.find((r) => r.setting_key === 'detection.confirmation_mode').schema)
+      .toEqual({ type: 'string', enum: ['consecutive_points', 'min_events', 'dwell'] });
   });
 
   it('POST /detection/reprocess: SUPER_ADMIN only; by date returns per-assignment results', async () => {

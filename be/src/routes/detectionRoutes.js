@@ -71,13 +71,26 @@ export function createDetectionRoutes() {
   return router;
 }
 
+const settingJsonSchema = (schema) => {
+  const { $schema: _s, ...rest } = z.toJSONSchema(schema, { unrepresentable: 'any' });
+  return rest;
+};
+
 /** Admin settings: GET all, PUT one key (validated per key, audited old -> new). */
 export function createSettingsAdminRoutes() {
   const router = Router();
   router.use(requireRole('SUPER_ADMIN'));
   router.get('/', async (_req, res) => {
     const { rows } = await db.query('SELECT setting_key, setting_value, description, updated_by, updated_at FROM system_settings ORDER BY setting_key');
-    sendSuccess(res, { message: 'Settings fetched successfully', data: rows.map((r) => ({ ...r, editable: Boolean(SETTING_DEFS[r.setting_key]) })) });
+    // `schema` (JSON Schema generated from the server's zod definition) lets the UI show and pre-check
+    // valid ranges without a second, drifting copy of them; the server still validates every PUT.
+    sendSuccess(res, {
+      message: 'Settings fetched successfully',
+      data: rows.map((r) => {
+        const def = SETTING_DEFS[r.setting_key];
+        return { ...r, editable: Boolean(def), default: def?.default ?? null, schema: def ? settingJsonSchema(def.schema) : null };
+      }),
+    });
   });
   router.put('/:key', validate({ params: z.object({ key: z.string().max(100) }), body: z.strictObject({ value: z.unknown() }) }), async (req, res) => {
     const { key } = req.valid.params;

@@ -26,6 +26,26 @@ const historyWindow = {
 };
 const historyQuery = z.object({ vehicle_id: z.coerce.number().int().positive(), ...historyWindow });
 
+/**
+ * Non-secret GPS configuration. An explicit allowlist of fields — env is never spread, so a provider
+ * URL / key / token added later can't leak through this endpoint.
+ */
+export function publicGpsConfig(e = env) {
+  const pollEnabled = Boolean(e.GPS_POLL_ENABLED);
+  return {
+    provider: e.GPS_PROVIDER,
+    simulator: e.GPS_PROVIDER === 'simulator',
+    poll_enabled: pollEnabled,
+    poll_interval_seconds: e.GPS_POLL_INTERVAL_SECONDS,
+    provider_timeout_ms: e.GPS_PROVIDER_TIMEOUT_MS,
+    provider_timezone: e.GPS_PROVIDER_TIMEZONE,
+    future_tolerance_seconds: e.GPS_FUTURE_TOLERANCE_SECONDS,
+    store_raw_payload: Boolean(e.GPS_STORE_RAW),
+    detection_worker_enabled: Boolean(e.DETECTION_WORKER_ENABLED ?? pollEnabled),
+    detection_batch_size: e.DETECTION_BATCH_SIZE,
+  };
+}
+
 /** One poll-now per 30 s across the whole API (not per IP). */
 const pollNowLimiter = () => rateLimit({
   windowMs: 30_000,
@@ -49,6 +69,9 @@ export function createGpsRoutes() {
   });
   router.get('/vehicle-history', read, validate({ query: historyQuery }), async (req, res) => {
     sendSuccess(res, { message: 'Vehicle history fetched successfully', data: await vehicleHistory(req.valid.query, req.scope) });
+  });
+  router.get('/config', read, (_req, res) => {
+    sendSuccess(res, { message: 'GPS configuration (non-secret)', data: publicGpsConfig() });
   });
   router.get('/provider-status', read, async (_req, res) => {
     sendSuccess(res, { message: 'GPS provider status', data: await providerStatus(env.GPS_PROVIDER) });

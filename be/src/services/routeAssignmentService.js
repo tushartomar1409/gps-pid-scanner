@@ -11,6 +11,7 @@ import { normaliseIp } from '../repositories/activityLogRepository.js';
 const TZ = env.APP_TIMEZONE;
 export const RA_SCOPE = { zone: 'r.zone_id', ward: 'r.ward_id', agency: 'ra.agency_id' };
 export const COVERED_STATUS = 'GPS_VISIT_CONFIRMED';
+export const MAP_PIDS_CAP = 10_000;
 
 const RA_SELECT = `ra.id, ra.operational_date::text AS operational_date, ra.shift_start, ra.shift_end, ra.status,
   ra.route_id, r.route_code, r.route_name, r.zone_id, z.zone_name, r.ward_id, w.ward_name,
@@ -306,6 +307,32 @@ export const routeAssignmentService = {
       where.params,
     );
     return { ...assignment, pids: rows, pids_pagination: paginationMeta(q.page, q.limit, total) };
+  },
+
+  /** Every snapshot PID of one assignment (coverage map; never paged, capped at MAP_PIDS_CAP). One statement. */
+  async mapPids(id, scope) {
+    const where = applyScope(new SqlWhere(), scope, RA_SCOPE).add('ra.id = ?', id);
+    const capP = where.param(MAP_PIDS_CAP + 1);
+    const { rows: [r] } = await defaultDb.query(
+      `WITH ra AS (SELECT ra.id FROM route_assignments ra JOIN routes r ON r.id = ra.route_id ${where.toSql()})
+       SELECT (SELECT id FROM ra) AS id,
+              COALESCE((SELECT json_agg(x ORDER BY x.pid_number) FROM (
+                SELECT rap.pid_id, p.pid_number, p.address, z.zone_name, w.ward_name,
+                       rap.pid_latitude::float8 AS latitude, rap.pid_longitude::float8 AS longitude,
+                       s.visit_status, s.first_visit_at, s.last_visit_at, s.detection_count,
+                       s.min_distance_meters::float8 AS min_distance_meters, s.ambiguous
+                  FROM route_assignment_pids rap
+                  JOIN pids p ON p.id = rap.pid_id
+                  LEFT JOIN zones z ON z.id = p.zone_id
+                  LEFT JOIN wards w ON w.id = p.ward_id
+                  LEFT JOIN pid_daily_status s ON s.route_assignment_id = rap.route_assignment_id AND s.pid_id = rap.pid_id
+                 WHERE rap.route_assignment_id = (SELECT id FROM ra)
+                 ORDER BY p.pid_number LIMIT ${capP}) x), '[]') AS pids`,
+      where.params,
+    );
+    if (!r.id) throw notFound('Route assignment not found');
+    const truncated = r.pids.length > MAP_PIDS_CAP;
+    return { route_assignment_id: r.id, pids: truncated ? r.pids.slice(0, MAP_PIDS_CAP) : r.pids, truncated, cap: MAP_PIDS_CAP };
   },
 
   async cancel(id, ctx) {

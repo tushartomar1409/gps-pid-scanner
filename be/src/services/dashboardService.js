@@ -47,6 +47,7 @@ const COUNTS = `count(*)::int AS assigned,
   count(*) FILTER (WHERE s.visit_status = 'GPS_VISIT_CANDIDATE')::int AS candidate,
   count(*) FILTER (WHERE s.visit_status = 'GPS_DATA_UNAVAILABLE')::int AS unavailable`;
 const DERIVED = (a = '') => `${a}assigned - ${a}confirmed AS remaining,
+  ${a}assigned - ${a}confirmed - ${a}candidate AS remaining_undetected,
   ${pct(`${a}confirmed`, `${a}assigned`)} AS confirmed_pct,
   ${pct(`${a}confirmed + ${a}candidate`, `${a}assigned`)} AS detected_pct`;
 
@@ -75,7 +76,7 @@ export function buildSummaryQuery(q, scope, { offlineS = 300, tz = env.APP_TIMEZ
     text: `
 WITH pd AS (SELECT ${COUNTS} FROM ${ASSIGN_FROM} ${assignWhere}),
 veh AS (
-  SELECT count(*)::int AS total_vehicles,
+  SELECT count(*) FILTER (WHERE v.status = 'ACTIVE')::int AS total_vehicles, -- registered ACTIVE vehicles (GUIDE #9 answer 2)
          count(*) FILTER (WHERE v.status = 'ACTIVE' AND x.has_gps)::int     AS active_vehicles,
          count(*) FILTER (WHERE v.status = 'ACTIVE' AND NOT x.has_gps)::int AS offline_vehicles,
          count(*) FILTER (WHERE v.status = 'ACTIVE' AND l.recorded_at >= now() - make_interval(secs => ${offP}::int))::int AS online_now
@@ -89,6 +90,7 @@ reg AS (SELECT count(*)::int AS total_registered_pids FROM pids p ${pidWhere})
 SELECT veh.*, reg.total_registered_pids, pd.assigned AS assigned_pids, pd.confirmed AS gps_confirmed_pids,
        pd.confirmed + pd.candidate AS gps_detected_pids, pd.candidate AS gps_candidate_pids, pd.unavailable AS gps_unavailable_pids,
        pd.assigned - pd.confirmed AS remaining_pids,
+       pd.assigned - pd.confirmed - pd.candidate AS remaining_undetected_pids,
        ${pct('pd.confirmed', 'pd.assigned')} AS gps_confirmed_coverage_pct,
        ${pct('pd.confirmed + pd.candidate', 'pd.assigned')} AS gps_visit_detected_pct
   FROM veh, reg, pd`,
