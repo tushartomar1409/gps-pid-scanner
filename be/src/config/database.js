@@ -21,7 +21,7 @@ export function buildConnectionConfig({ url = env.DATABASE_URL, schema = env.DB_
     // own idle clients after 10 s avoids handing out a dead socket (ECONNRESET on the next query).
     keepAlive: true,
     idleTimeoutMillis: 10_000,
-    connectionTimeoutMillis: 15_000,
+    connectionTimeoutMillis: env.DB_CONNECT_TIMEOUT_MS,
   };
   if (schema || unpooled) u.hostname = u.hostname.replace('-pooler.', '.');
   if (schema) config.options = `-c search_path=${schema},public`;

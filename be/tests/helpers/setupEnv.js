@@ -7,6 +7,7 @@ process.env.NODE_ENV = 'test';
 process.env.DB_SCHEMA = inject('testSchema');
 process.env.BCRYPT_ROUNDS = '4'; // speed only; production default stays 12
 process.env.DB_POOL_MAX = '5';
+process.env.DB_CONNECT_TIMEOUT_MS = '30000'; // Neon cold starts (GUIDE #11 B2)
 // Report archive files go to a per-run temp dir (removed by globalSetup teardown), never be/storage.
 process.env.REPORTS_DIR = path.join(os.tmpdir(), `gpspid-reports-${process.env.DB_SCHEMA}`);
 
