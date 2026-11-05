@@ -93,7 +93,7 @@ describe('grouped dashboards', () => {
     expect(ag[a1.id]).toMatchObject({ assigned: 4, confirmed: 2, detected_pct: 75 });
     expect(ag[a2.id]).toMatchObject({ assigned: 3, confirmed: 0, confirmed_pct: 0 });
     const veh = Object.fromEntries((await get(`/api/dashboard/vehicle-performance?date=${D}&zone_id=${zone.id}`)).body.data.groups.map((g) => [g.group_id, g]));
-    expect(veh[v1.id]).toMatchObject({ group_name: v1.vehicle_number, assigned: 4, confirmed: 2, remaining: 2 });
+    expect(veh[v1.id]).toMatchObject({ group_name: v1.vehicle_number, agency_name: a1.agency_name, vehicle_type: v1.vehicle_type, assigned: 4, confirmed: 2, remaining: 2 });
     expect(new Date(veh[v1.id].first_gps_activity).toISOString()).toBe(ist(D, '09:05:00').toISOString());
     expect(new Date(veh[v1.id].last_gps_activity).toISOString()).toBe(ist(D, '14:10:00').toISOString());
     expect(veh[v2.id]).toMatchObject({ first_gps_activity: null, last_gps_activity: null });

@@ -108,7 +108,10 @@ const GROUPS = {
   zone: { key: 'r.zone_id', label: 'z.zone_name', join: 'JOIN zones z ON z.id = r.zone_id' },
   ward: { key: 'r.ward_id', label: 'w.ward_name', join: 'JOIN wards w ON w.id = r.ward_id' },
   agency: { key: 'ra.agency_id', label: "COALESCE(a.agency_name, '(no agency)')", join: 'LEFT JOIN agencies a ON a.id = ra.agency_id' },
-  vehicle: { key: 'ra.vehicle_id', label: 'v.vehicle_number', join: 'JOIN vehicles v ON v.id = ra.vehicle_id' },
+  vehicle: {
+    key: 'ra.vehicle_id', label: 'v.vehicle_number', extra: ', v.vehicle_type, va.agency_name',
+    join: 'JOIN vehicles v ON v.id = ra.vehicle_id LEFT JOIN agencies va ON va.id = v.agency_id', groupExtra: ', v.vehicle_type, va.agency_name',
+  },
 };
 
 export function buildGroupedQuery(group, q, scope, { tz = env.APP_TIMEZONE } = {}) {
@@ -124,10 +127,10 @@ export function buildGroupedQuery(group, q, scope, { tz = env.APP_TIMEZONE } = {
     : '';
   return {
     text: `SELECT t.*, ${DERIVED('t.')} FROM (
-      SELECT ${g.key} AS group_id, ${g.label} AS group_name, ${COUNTS} ${activity}
+      SELECT ${g.key} AS group_id, ${g.label} AS group_name${g.extra || ''},${COUNTS} ${activity}
         FROM ${ASSIGN_FROM} ${g.join}
         ${where}
-       GROUP BY ${g.key}, ${g.label}${group === 'vehicle' ? ', ra.vehicle_id' : ''}) t
+       GROUP BY ${g.key}, ${g.label}${g.groupExtra || ''}) t
      ORDER BY t.group_name`,
     values: b.w.params,
   };
