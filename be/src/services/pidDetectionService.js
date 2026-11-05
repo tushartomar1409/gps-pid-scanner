@@ -47,7 +47,10 @@ cand AS (
   -- LATERAL = one index probe per point on idx_rap_ra_lat_lng (route_assignment_id, pid_latitude,
   -- pid_longitude) using the bbox, regardless of how large the snapshot table grows over the years.
   -- haversine_m() is the exact filter.
-  SELECT g.id AS gps_id, g.vehicle_id, g.ra_id, g.recorded_at, g.speed, g.evidence, c.pid_id, c.dist
+  -- n = PIDs within radius of this point (ambiguity), as a window count: never join this CTE to an
+  -- aggregate of itself (1-row CTE estimates turn that into a quadratic nested loop).
+  SELECT g.id AS gps_id, g.vehicle_id, g.ra_id, g.recorded_at, g.speed, g.evidence, c.pid_id, c.dist,
+         count(*) OVER (PARTITION BY g.id, g.ra_id)::int AS n
     FROM gated g
     CROSS JOIN LATERAL (
       SELECT rap.pid_id, haversine_m(g.lat, g.lng, rap.pid_latitude::float8, rap.pid_longitude::float8) AS dist
@@ -60,7 +63,6 @@ cand AS (
     ) c
    WHERE c.dist <= $3::float8
 ),
-amb AS (SELECT gps_id, ra_id, count(*)::int AS n FROM cand GROUP BY gps_id, ra_id),
 -- ---- TRACK_SEGMENT evidence (GUIDE #8): the line between two strictly adjacent, valid points of the
 -- same vehicle and assignment (gap ≤ $12 s, length ≤ $11 m). For each valid batch point, its previous
 -- point AND (for late arrivals) its next point; the event belongs to the LATER point of the pair.
@@ -98,7 +100,7 @@ segs AS (
                   OR (y.shift_start IS NULL AND y.operational_date = (x.n_at AT TIME ZONE $2)::date))
            ORDER BY (y.shift_start IS NOT NULL) DESC, y.id LIMIT 1) = x.ra_id
 ),
-seg_cand AS (
+seg_dedup AS (
   -- PIDs within radius of the segment INTERIOR only: if either endpoint is within radius, point evidence
   -- already covers it (and the unique key would collide).
   SELECT DISTINCT ON (s.later_id, s.ra_id, c.pid_id)
@@ -121,15 +123,15 @@ seg_cand AS (
    WHERE c.dist <= $3::float8 AND c.da > $3::float8 AND c.db > $3::float8
    ORDER BY s.later_id, s.ra_id, c.pid_id, c.dist
 ),
-seg_amb AS (SELECT gps_id, ra_id, count(*)::int AS n FROM seg_cand GROUP BY gps_id, ra_id),
+seg_cand AS (
+  SELECT d.*, count(*) OVER (PARTITION BY d.gps_id, d.ra_id)::int AS n FROM seg_dedup d
+),
 ins AS (
   INSERT INTO pid_visit_events (route_assignment_id, pid_id, vehicle_id, gps_location_id, distance_meters,
                                 speed_at_detection, detected_at, evidence_status, ambiguous, pids_in_radius)
-  SELECT c.ra_id, c.pid_id, c.vehicle_id, c.gps_id, round(c.dist::numeric, 2), c.speed, c.recorded_at, c.evidence, a.n >= 2, a.n
-    FROM cand c JOIN amb a ON a.gps_id = c.gps_id AND a.ra_id = c.ra_id
+  SELECT ra_id, pid_id, vehicle_id, gps_id, round(dist::numeric, 2), speed, recorded_at, evidence, n >= 2, n FROM cand
   UNION ALL
-  SELECT c.ra_id, c.pid_id, c.vehicle_id, c.gps_id, round(c.dist::numeric, 2), c.speed, c.recorded_at, c.evidence, a.n >= 2, a.n
-    FROM seg_cand c JOIN seg_amb a ON a.gps_id = c.gps_id AND a.ra_id = c.ra_id
+  SELECT ra_id, pid_id, vehicle_id, gps_id, round(dist::numeric, 2), speed, recorded_at, evidence, n >= 2, n FROM seg_cand
   ON CONFLICT (route_assignment_id, pid_id, gps_location_id) DO NOTHING
   RETURNING id
 ),
