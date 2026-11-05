@@ -29,6 +29,8 @@ const schema = z.object({
   CORS_ORIGIN: z.string().default('http://localhost:5173'),
   TRUST_PROXY: bool.default(false),
   LOGIN_RATE_LIMIT_PER_MIN: z.coerce.number().int().positive().default(5),
+  IMPORT_MAX_ROWS: z.coerce.number().int().positive().default(50_000),
+  IMPORT_MAX_FILE_MB: z.coerce.number().positive().max(50).default(10),
 });
 
 const parsed = schema.safeParse(process.env);

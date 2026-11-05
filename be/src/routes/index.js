@@ -6,6 +6,9 @@ import {
   createZoneRoutes, createWardRoutes, createAgencyRoutes, createVehicleRoutes, createUserRoutes,
 } from './masterRoutes.js';
 import { createRoleRoutes, createLookupRoutes } from './referenceRoutes.js';
+import { createPidRoutes } from './pidRoutes.js';
+import { createRouteRoutes } from './routeRoutes.js';
+import { createRouteAssignmentRoutes } from './routeAssignmentRoutes.js';
 import { sendSuccess } from '../utils/responseHandler.js';
 
 export function createApiRouter() {
@@ -24,6 +27,9 @@ export function createApiRouter() {
   api.use('/users', ...guard, createUserRoutes());
   api.use('/roles', ...guard, createRoleRoutes());
   api.use('/lookups', ...guard, createLookupRoutes());
+  api.use('/pids', ...guard, createPidRoutes());
+  api.use('/routes', ...guard, createRouteRoutes());
+  api.use('/route-assignments', ...guard, createRouteAssignmentRoutes());
 
   return api;
 }

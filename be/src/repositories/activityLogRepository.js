@@ -11,7 +11,7 @@ export const activityLogRepository = {
 };
 
 // Express may report IPv4-mapped IPv6 ("::ffff:1.2.3.4"); INET accepts both, but reject garbage.
-function normaliseIp(ip) {
+export function normaliseIp(ip) {
   if (!ip) return null;
   const v = String(ip).replace(/^::ffff:/, '');
   return /^[0-9a-fA-F:.]+$/.test(v) ? v : null;

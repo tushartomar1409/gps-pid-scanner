@@ -23,11 +23,16 @@ export function scopeFromUser(user) {
   };
 }
 
-/** Apply scope to a SqlWhere. A scoped role missing its required id sees nothing (fail closed). */
+/**
+ * Apply scope to a SqlWhere. A scoped role missing its required id sees nothing (fail closed).
+ * A scope column may also be a function `(placeholder) => sqlFragment` for scopes that need a
+ * subquery (e.g. PIDs visible to an agency through its routes: `EXISTS (...)`).
+ */
 export function applyScope(where, scope, columns = {}) {
   if (!scope || scope.unrestricted) return where;
   const restrict = (column, value) => {
     if (value === null || value === undefined) where.add('FALSE');
+    else if (typeof column === 'function') where.clauses.push(`(${column(where.param(value))})`);
     else where.add(`${column} = ?`, value);
   };
   switch (scope.role_key) {

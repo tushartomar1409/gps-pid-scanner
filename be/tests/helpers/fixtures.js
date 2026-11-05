@@ -60,3 +60,51 @@ export async function createUser(roleKey, { zone_id = null, ward_id = null, agen
 }
 
 export const bearer = (token) => ({ Authorization: `Bearer ${token}` });
+
+/** Zone + ward pair in one call. */
+export async function createZoneWard() {
+  const zone = await createZone();
+  const ward = await createWard(zone.id);
+  return { zone, ward };
+}
+
+export async function createPid({ zone_id, ward_id, latitude = null, longitude = null, status = 'ACTIVE', pid_number } = {}) {
+  const { rows } = await pool.query(
+    `INSERT INTO pids (pid_number, zone_id, ward_id, latitude, longitude, coord_status, status)
+     VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+    [pid_number ?? `PID${uid()}`, zone_id, ward_id, latitude, longitude, latitude === null ? 'MISSING' : 'IMPORTED', status],
+  );
+  return rows[0];
+}
+
+export async function createRoute({ zone_id, ward_id, agency_id = null, status = 'ACTIVE', route_code } = {}) {
+  const { rows } = await pool.query(
+    `INSERT INTO routes (route_code, route_name, zone_id, ward_id, agency_id, status)
+     VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+    [route_code ?? `R${uid()}`, 'Test route', zone_id, ward_id, agency_id, status],
+  );
+  return rows[0];
+}
+
+export async function addRoutePids(routeId, pidIds) {
+  await pool.query(
+    `INSERT INTO route_pids (route_id, pid_id, sequence_no)
+     SELECT $1, t.id, t.ord FROM unnest($2::bigint[]) WITH ORDINALITY AS t(id, ord)`,
+    [routeId, pidIds],
+  );
+}
+
+/** Route in a fresh zone/ward with `n` PIDs (coordinates unless `withoutCoords` lists indexes). */
+export async function createRouteWithPids(n, { agency_id = null, withoutCoords = [] } = {}) {
+  const { zone, ward } = await createZoneWard();
+  const route = await createRoute({ zone_id: zone.id, ward_id: ward.id, agency_id });
+  const pids = [];
+  for (let i = 0; i < n; i++) {
+    // Area (26.x, 75.x) kept apart from coordinates used by the import tests (28.x, 77.x).
+    const coords = withoutCoords.includes(i) ? {} : { latitude: 26.1 + Math.random() * 0.5, longitude: 75.1 + Math.random() * 0.5 };
+    // eslint-disable-next-line no-await-in-loop
+    pids.push(await createPid({ zone_id: zone.id, ward_id: ward.id, ...coords }));
+  }
+  await addRoutePids(route.id, pids.map((p) => p.id));
+  return { zone, ward, route, pids };
+}

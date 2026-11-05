@@ -7,7 +7,8 @@ export default defineConfig({
     setupFiles: ['tests/helpers/setupEnv.js'],
     // Integration tests share one throwaway schema on a remote DB; run files sequentially.
     fileParallelism: false,
-    testTimeout: 30_000,
+    // Remote DB (~265 ms per round trip from this machine) makes multi-request tests slow, not hung.
+    testTimeout: 120_000,
     hookTimeout: 120_000,
   },
 });

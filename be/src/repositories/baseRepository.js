@@ -12,7 +12,7 @@ import { applyScope } from '../middleware/scopeMiddleware.js';
  * @param {string} def.from           FROM clause incl. joins (no "FROM")
  * @param {string[]} def.writable     columns allowed in INSERT/UPDATE
  * @param {string[]} [def.search]     columns for ?search=
- * @param {Record<string,string>} [def.filters]  query key -> column (equality)
+ * @param {Record<string,string|Function>} [def.filters]  query key -> column (equality) or (where, value) => void
  * @param {object} [def.scope]        { zone, ward, agency } scope columns
  * @param {string} [def.orderBy]
  */
@@ -27,7 +27,13 @@ export function createCrudRepository(def) {
   return {
     async list({ page = 1, limit = 20, search: term, filters: f = {}, scope } = {}, executor = defaultDb) {
       const where = baseWhere(scope);
-      for (const [key, column] of Object.entries(filters)) where.eq(column, f[key]);
+      for (const [key, column] of Object.entries(filters)) {
+        const value = f[key];
+        // A filter is either a column (equality) or a function (where, value) for custom predicates.
+        if (typeof column === 'function') {
+          if (value !== undefined && value !== null && value !== '') column(where, value);
+        } else where.eq(column, value);
+      }
       where.search(search, term);
       const whereSql = where.toSql();
 

@@ -42,6 +42,11 @@ export function errorHandler(err, req, res, _next) {
   if (err?.type === 'entity.too.large') {
     return sendError(res, { status: 413, message: 'Request body too large' });
   }
+  if (err?.name === 'MulterError') {
+    return err.code === 'LIMIT_FILE_SIZE'
+      ? sendError(res, { status: 413, message: 'Uploaded file is too large' })
+      : sendError(res, { status: 400, message: `Upload error: ${err.message}` });
+  }
   const pg = err?.code ? mapPgError(err) : null;
   if (pg) return sendError(res, pg);
 
