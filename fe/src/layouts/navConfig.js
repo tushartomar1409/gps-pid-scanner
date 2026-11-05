@@ -6,6 +6,15 @@ export const NAV_SECTIONS = [
     items: [{ to: '/', label: 'Home', permission: null, end: true }],
   },
   {
+    title: 'Operations',
+    items: [
+      { to: '/pids', label: 'PIDs', permission: 'pids:read', end: true },
+      { to: '/pids/import', label: 'PID Import', permission: 'pids:write' },
+      { to: '/routes', label: 'Routes', permission: 'routes:read' },
+      { to: '/assignments', label: 'Assignments', permission: 'assignments:read' },
+    ],
+  },
+  {
     title: 'Master Data',
     items: [
       { to: '/zones', label: 'Zones', permission: 'zones:read' },

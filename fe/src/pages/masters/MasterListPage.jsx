@@ -1,5 +1,6 @@
 // Shared list/create/edit/deactivate screen for master resources.
 import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { DataTable } from '../../components/DataTable.jsx';
 import { Button } from '../../components/Button.jsx';
 import { Input } from '../../components/Input.jsx';
@@ -25,6 +26,12 @@ const PAGE_SIZE = 20;
  *   columns: [{ key, header, render? }],
  *   Form: component({ formId, initial, isEdit, lookups, serverErrors, onSubmit }),
  *   conflictMessages?: { [constraint]: message }, conflictFallback?: string,
+ *   // Optional extensions (Phase 2b):
+ *   createPath?: string, editPath?: (row) => string,   // navigate to a full page instead of the modal
+ *   extraRowActions?: (row, { refetch }) => node,       // extra buttons (write users only)
+ *   extraKeys?: string[],                               // extra URL params kept in sync (e.g. 'view')
+ *   renderToolbar?: ({ params, setParams, refetch }) => node,
+ *   renderAlternateView?: ({ params, setParams, refetch }) => node | null, // replaces the table when non-null
  * }
  */
 export function MasterListPage({ config }) {
@@ -32,9 +39,10 @@ export function MasterListPage({ config }) {
   const can = usePermission();
   const canWrite = can(`${permission}:write`);
   const toast = useToast();
+  const navigate = useNavigate();
 
   const filterKeys = filters.map((f) => f.key);
-  const { params, setParams, setPage } = useListParams(filterKeys);
+  const { params, setParams, setPage } = useListParams([...filterKeys, ...(config.extraKeys || [])]);
   const lookups = useLookups(lookupTypes.length ? lookupTypes : ['zones']);
 
   // Debounced search synced to the URL.
@@ -55,10 +63,12 @@ export function MasterListPage({ config }) {
   const formId = `${permission}-form`;
 
   const openCreate = () => {
+    if (config.createPath) return navigate(config.createPath);
     setServerErrors({});
     setEditing({});
   };
   const openEdit = (row) => {
+    if (config.editPath) return navigate(config.editPath(row));
     setServerErrors({});
     setEditing(row);
   };
@@ -112,6 +122,7 @@ export function MasterListPage({ config }) {
             className: 'text-right',
             render: (r) => (
               <div className="flex justify-end gap-1">
+                {config.extraRowActions?.(r, { refetch })}
                 <Button variant="ghost" size="sm" onClick={() => openEdit(r)} aria-label={`Edit ${r[config.labelKey] ?? r.id}`}>
                   Edit
                 </Button>
@@ -170,19 +181,23 @@ export function MasterListPage({ config }) {
         )}
       </div>
 
-      <DataTable
-        columns={columns}
-        rows={rows}
-        loading={loading}
-        error={error}
-        onRetry={refetch}
-        pagination={pagination}
-        onPageChange={setPage}
-        emptyTitle={hasActiveFilters ? 'No matching records' : `No ${title.toLowerCase()} yet`}
-        emptyMessage={
-          hasActiveFilters ? 'Try changing the search or filters.' : canWrite ? `Use “Add ${singular.toLowerCase()}” to create the first one.` : undefined
-        }
-      />
+      {config.renderToolbar?.({ params, setParams, refetch })}
+
+      {config.renderAlternateView?.({ params, setParams, refetch }) ?? (
+        <DataTable
+          columns={columns}
+          rows={rows}
+          loading={loading}
+          error={error}
+          onRetry={refetch}
+          pagination={pagination}
+          onPageChange={setPage}
+          emptyTitle={hasActiveFilters ? 'No matching records' : `No ${title.toLowerCase()} yet`}
+          emptyMessage={
+            hasActiveFilters ? 'Try changing the search or filters.' : canWrite ? `Use “Add ${singular.toLowerCase()}” to create the first one.` : undefined
+          }
+        />
+      )}
 
       <Modal
         open={editing !== null}

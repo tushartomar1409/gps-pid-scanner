@@ -21,7 +21,15 @@ describe('Sidebar', () => {
 
   it('shows everything for the * permission', () => {
     renderSidebar({ permissions: ['*'] });
-    expect(screen.getAllByRole('link').map((a) => a.textContent)).toEqual(['Home', 'Zones', 'Wards', 'Agencies', 'Vehicles', 'Users']);
+    expect(screen.getAllByRole('link').map((a) => a.textContent)).toEqual([
+      'Home', 'PIDs', 'PID Import', 'Routes', 'Assignments', 'Zones', 'Wards', 'Agencies', 'Vehicles', 'Users',
+    ]);
+  });
+
+  it('shows the Operations section for read-only roles without the write-only Import item', () => {
+    renderSidebar({ permissions: ['pids:read', 'routes:read', 'assignments:read'] });
+    expect(screen.getAllByRole('link').map((a) => a.textContent)).toEqual(['Home', 'PIDs', 'Routes', 'Assignments']);
+    expect(screen.getByText('Operations')).toBeInTheDocument();
   });
 
   it('shows only Home for a user without permissions', () => {
