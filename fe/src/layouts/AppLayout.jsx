@@ -4,6 +4,8 @@ import { useAuth } from '../auth/AuthContext.jsx';
 import { Sidebar } from './Sidebar.jsx';
 import { Button } from '../components/Button.jsx';
 import { scopeLabel } from '../utils/format.js';
+import { usePermission } from '../auth/usePermission.js';
+import { GpsStatusBadge } from '../components/GpsStatusBadge.jsx';
 
 function Brand() {
   return (
@@ -19,6 +21,7 @@ function Brand() {
 
 export function AppLayout() {
   const { user, logout } = useAuth();
+  const can = usePermission();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const location = useLocation();
@@ -65,6 +68,7 @@ export function AppLayout() {
           </button>
           <div className="min-w-0 flex-1" />
           <div className="flex items-center gap-3">
+            {can('gps:read') && <GpsStatusBadge />}
             <div className="min-w-0 text-right leading-tight">
               <p className="truncate text-sm font-semibold text-slate-900">{user?.name}</p>
               <p className="truncate text-xs text-slate-500">
