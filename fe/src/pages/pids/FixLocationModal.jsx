@@ -10,6 +10,7 @@ import { MapClick } from '../../components/map/MapHelpers.jsx';
 import { MAP_CONFIG } from '../../config/mapConfig.js';
 import { serviceAreaWarning } from '../../utils/mapStyles.js';
 import { pidsApi } from '../../api/resources.js';
+import { useSettings } from '../../settings/SettingsContext.jsx';
 import { parseApiError } from '../../utils/apiErrors.js';
 
 function Recenter({ position }) {
@@ -34,6 +35,7 @@ export function parseLatLng(latStr, lngStr) {
 
 export function FixLocationModal({ pid, onClose, onSaved, renderMap = true }) {
   const toast = useToast();
+  const { serviceAreaBbox } = useSettings();
   const hasCoords = pid?.latitude != null;
   const [latStr, setLatStr] = useState(hasCoords ? fmt(pid.latitude) : '');
   const [lngStr, setLngStr] = useState(hasCoords ? fmt(pid.longitude) : '');
@@ -71,7 +73,7 @@ export function FixLocationModal({ pid, onClose, onSaved, renderMap = true }) {
   const onSave = () => {
     const p = parseLatLng(latStr, lngStr);
     if (p.errors) return setErrors(p.errors);
-    const warning = serviceAreaWarning(p.lat, p.lng, MAP_CONFIG.serviceAreaBbox);
+    const warning = serviceAreaWarning(p.lat, p.lng, serviceAreaBbox);
     if (warning && !pendingWarning) return setPendingWarning(warning); // confirm in the UI first
     send(p.lat, p.lng);
   };

@@ -57,6 +57,14 @@ export const assignmentsApi = {
   resnapshot: (id) => api.post(`/route-assignments/${id}/resnapshot`).then(unwrap),
 };
 
+export const settingsApi = {
+  public: () => api.get('/settings/public').then(unwrap),
+};
+
+export const gpsApi = {
+  providerStatus: ({ signal } = {}) => api.get('/gps/provider-status', { signal }).then(unwrap),
+};
+
 export const referenceApi = {
   roles: () => api.get('/roles').then(unwrap),
   lookups: (types) => api.get('/lookups', { params: { types: types.join(',') } }).then(unwrap),

@@ -2,6 +2,7 @@
 // (unsaved-changes guard that also catches browser Back/Forward).
 import { Outlet } from 'react-router-dom';
 import { AuthProvider } from './auth/AuthContext.jsx';
+import { SettingsProvider } from './settings/SettingsContext.jsx';
 import { ProtectedRoute } from './auth/ProtectedRoute.jsx';
 import { AppLayout } from './layouts/AppLayout.jsx';
 import LoginPage from './pages/LoginPage.jsx';
@@ -24,7 +25,9 @@ const guard = (permission, element) => <ProtectedRoute permission={permission}>{
 function Root() {
   return (
     <AuthProvider>
-      <Outlet />
+      <SettingsProvider>
+        <Outlet />
+      </SettingsProvider>
     </AuthProvider>
   );
 }
