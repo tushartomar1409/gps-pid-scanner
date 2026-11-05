@@ -9,7 +9,9 @@ pg.types.setTypeParser(1700, (v) => (v === null ? null : Number(v)));
 
 // When DB_SCHEMA is set (tests), we connect via Neon's *unpooled* host because the pooler (PgBouncer)
 // rejects the `search_path` startup option; normal runs (no DB_SCHEMA) keep using the pooled host.
-export function buildConnectionConfig({ url = env.DATABASE_URL, schema = env.DB_SCHEMA } = {}) {
+// `unpooled: true` forces the direct host without changing search_path — needed for session-level
+// state such as the GPS poller's pg_advisory_lock (PgBouncer transaction mode would not keep it).
+export function buildConnectionConfig({ url = env.DATABASE_URL, schema = env.DB_SCHEMA, unpooled = false } = {}) {
   const u = new URL(url);
   // Explicit verify-full: current pg behaviour for sslmode=require, without the deprecation warning.
   u.searchParams.set('sslmode', 'verify-full');
@@ -21,11 +23,8 @@ export function buildConnectionConfig({ url = env.DATABASE_URL, schema = env.DB_
     idleTimeoutMillis: 10_000,
     connectionTimeoutMillis: 15_000,
   };
-  if (schema) {
-    // Neon's pooler rejects the search_path startup parameter -> use the unpooled host.
-    u.hostname = u.hostname.replace('-pooler.', '.');
-    config.options = `-c search_path=${schema},public`;
-  }
+  if (schema || unpooled) u.hostname = u.hostname.replace('-pooler.', '.');
+  if (schema) config.options = `-c search_path=${schema},public`;
   config.connectionString = u.toString();
   return config;
 }

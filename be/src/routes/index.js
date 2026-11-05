@@ -10,6 +10,7 @@ import { createPidRoutes } from './pidRoutes.js';
 import { createRouteRoutes } from './routeRoutes.js';
 import { createRouteAssignmentRoutes } from './routeAssignmentRoutes.js';
 import { createSettingsRoutes } from './settingsRoutes.js';
+import { createGpsRoutes, createVehicleGpsAliasRoutes } from './gpsRoutes.js';
 import { sendSuccess } from '../utils/responseHandler.js';
 
 export function createApiRouter() {
@@ -24,7 +25,7 @@ export function createApiRouter() {
   api.use('/zones', ...guard, createZoneRoutes());
   api.use('/wards', ...guard, createWardRoutes());
   api.use('/agencies', ...guard, createAgencyRoutes());
-  api.use('/vehicles', ...guard, createVehicleRoutes());
+  api.use('/vehicles', ...guard, createVehicleGpsAliasRoutes(), createVehicleRoutes());
   api.use('/users', ...guard, createUserRoutes());
   api.use('/roles', ...guard, createRoleRoutes());
   api.use('/lookups', ...guard, createLookupRoutes());
@@ -32,6 +33,7 @@ export function createApiRouter() {
   api.use('/routes', ...guard, createRouteRoutes());
   api.use('/route-assignments', ...guard, createRouteAssignmentRoutes());
   api.use('/settings', ...guard, createSettingsRoutes());
+  api.use('/gps', ...guard, createGpsRoutes());
 
   return api;
 }
