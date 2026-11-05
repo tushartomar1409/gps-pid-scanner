@@ -1,0 +1,1319 @@
+# Garbage Collection GPS Monitoring & PID Visit Tracking Portal
+## Complete Project Workflow & Technical Development Specification
+
+**Project Type:** Web-based Garbage Collection Monitoring System  
+**Frontend:** React.js  
+**Backend:** Node.js + Express.js  
+**Database:** MySQL  
+**Map Technology:** Leaflet.js + OpenStreetMap  
+**GPS Integration:** Existing Vehicle GPS Tracker API  
+**Deployment:** Existing Ubuntu/Linux Server
+
+---
+
+# 1. PROJECT OVERVIEW
+
+Develop a centralized Garbage Collection GPS Monitoring Portal that enables municipal authorities to monitor garbage collection vehicles, track their movement in real time, and automatically identify which Property IDs (PIDs) have been covered by garbage collection vehicles.
+
+The system must use the GPS trackers already installed in garbage collection vehicles. No additional hardware, RFID tags, QR codes, or physical sensors should be required.
+
+The portal must automatically compare vehicle GPS coordinates with the geographical coordinates of registered PIDs and determine whether a vehicle has passed sufficiently close to a PID.
+
+The system should provide:
+
+- Live vehicle tracking on a map.
+- PID-wise garbage collection visit tracking.
+- Automatic PID visit detection using GPS coordinates.
+- Route-wise and vehicle-wise monitoring.
+- Daily collection coverage reports.
+- Missed PID identification.
+- Historical vehicle movement.
+- Zone, ward, agency, and vehicle-level dashboards.
+- Administrative management and configuration.
+
+**Important:** GPS proximity confirms that a vehicle passed near a property. It does not independently prove that garbage was physically collected. Therefore, the system must use statuses such as "GPS Visit Detected" and "Collection Not Verified" rather than falsely claiming confirmed collection.
+
+# 2. CORE BUSINESS OBJECTIVE
+
+The primary objective is to answer the following questions:
+
+1. Which garbage collection vehicles are currently running?
+2. Where is each vehicle currently located?
+3. Which PIDs were covered by a vehicle today?
+4. Which PIDs are still not covered?
+5. Which vehicle covered a particular PID?
+6. At what time was a PID detected as visited?
+7. Which routes have been completed?
+8. Which vehicles have deviated from their assigned routes?
+9. How much of the assigned area has been covered?
+10. Which zones, wards, agencies, and vehicles are performing well or poorly?
+
+# 3. TECHNOLOGY STACK
+
+Use the following technology stack.
+
+## Frontend
+- React.js
+- React Router
+- Axios
+- Leaflet.js
+- React Leaflet
+- OpenStreetMap tiles
+- Tailwind CSS or Bootstrap
+- Recharts for dashboard charts
+
+## Backend
+- Node.js
+- Express.js
+- REST APIs
+- JWT authentication
+- Role-Based Access Control (RBAC)
+- Cron jobs / scheduled background workers
+
+## Database
+- MySQL
+- Proper indexing for GPS coordinates, PID, vehicle, date, and route queries.
+
+## Map
+- Leaflet.js for map rendering.
+- OpenStreetMap for base map tiles.
+- No mandatory Google Maps API dependency.
+- Keep the map provider configurable.
+
+## Infrastructure
+- Existing Ubuntu server.
+- Existing GPS tracking provider API.
+- Environment variables for all credentials and configuration.
+
+# 4. USER ROLES AND PERMISSIONS
+
+Implement role-based access control.
+
+### 4.1 Super Admin
+- Full system access.
+- Create and manage users.
+- Configure zones, wards, agencies, vehicles, routes, and PIDs.
+- Configure GPS API integration.
+- Configure GPS visit detection parameters.
+- View all dashboards and reports.
+- Access system logs.
+
+### 4.2 Department Admin
+- View all assigned department data.
+- Monitor all vehicles under the department.
+- View PID coverage.
+- Generate reports.
+- Manage assigned operational information.
+
+### 4.3 Zone Admin
+- View vehicles and routes within the assigned zone.
+- View PID coverage within the zone.
+- Monitor agency performance.
+- Generate zone-level reports.
+
+### 4.4 Ward Supervisor
+- View assigned ward.
+- Monitor vehicle movements.
+- Check visited and unvisited PIDs.
+- View route coverage.
+- Generate daily reports.
+
+### 4.5 Agency User
+- View vehicles assigned to the agency.
+- Monitor vehicle movement.
+- View route completion and PID visit reports.
+- Cannot access other agencies' data.
+
+# 5. MASTER DATA MANAGEMENT
+
+Create dedicated modules for managing all master data.
+
+## 5.1 Zone Master
+Fields:
+- Zone ID
+- Zone Name
+- Zone Code
+- Status
+
+## 5.2 Ward Master
+Fields:
+- Ward ID
+- Ward Name
+- Ward Number
+- Zone ID
+- Status
+
+Each ward must belong to a zone.
+
+## 5.3 Agency Master
+Fields:
+- Agency ID
+- Agency Name
+- Contact Person
+- Mobile Number
+- Address
+- Status
+
+## 5.4 Vehicle Master
+Fields:
+- Vehicle ID
+- Vehicle Registration Number
+- Vehicle Type
+- GPS Device ID
+- GPS Provider
+- Agency ID
+- Zone ID
+- Ward ID
+- Assigned Route ID
+- Status
+
+Each vehicle should be mapped with its GPS device ID.
+
+## 5.5 PID / Property Master
+
+This is one of the most important modules.
+
+Each property must have geographical coordinates.
+
+Fields:
+- PID ID
+- Property ID / PID Number
+- Property Owner Name (optional)
+- Mobile Number (optional)
+- Address
+- Zone ID
+- Ward ID
+- Latitude
+- Longitude
+- Assigned Route ID
+- Status
+
+Example:
+
+PID: PID10001  
+Latitude: 28.4082  
+Longitude: 77.3178  
+Ward: Ward 12  
+Zone: NIT  
+Route: ROUTE001
+
+**Important requirements:**
+
+- Support bulk PID import using Excel/CSV.
+- Validate latitude and longitude.
+- Identify duplicate PIDs.
+- Identify records with missing coordinates.
+- Allow manual coordinate correction by selecting a location on the map.
+- Display all registered PIDs on the map.
+- Allow filtering by zone, ward, and route.
+
+# 6. ROUTE MANAGEMENT
+
+Create a Route Management module.
+
+Each route should contain:
+
+- Route ID
+- Route Name
+- Zone ID
+- Ward ID
+- Agency ID
+- Assigned Vehicle
+- Route Start Point
+- Route End Point
+- Assigned PID List
+- Route Geometry / Coordinates
+- Route Status
+
+An administrator should be able to:
+
+1. Create a route.
+2. Select a zone and ward.
+3. Assign an agency.
+4. Assign a vehicle.
+5. Add PIDs to the route.
+6. View all selected PIDs on a map.
+7. Save the route.
+8. Update or deactivate the route.
+
+The system must support multiple PIDs in one route.
+
+A vehicle may have different route assignments on different dates. Maintain assignment history rather than overwriting previous assignments.
+
+# 7. GPS TRACKER API INTEGRATION
+
+Integrate the existing GPS tracking provider API.
+
+The implementation must be flexible because the GPS provider may have different API response formats.
+
+Create a separate GPS integration service.
+
+Example service:
+
+`services/gpsTrackerService.js`
+
+Responsibilities:
+
+- Authenticate with GPS provider API.
+- Fetch all registered vehicles.
+- Fetch current vehicle location.
+- Fetch historical vehicle coordinates.
+- Normalize API responses.
+- Handle API failures.
+- Handle missing GPS data.
+- Save GPS coordinates in the database.
+
+Normalize GPS data into this format:
+
+```json
+{
+  "device_id": "GPS12345",
+  "vehicle_number": "HR38AB1234",
+  "latitude": 28.4082,
+  "longitude": 77.3178,
+  "speed": 25,
+  "ignition": true,
+  "recorded_at": "2026-11-05T10:30:00",
+  "provider_status": "online"
+}
+```
+
+The actual provider response may differ. Convert it into the normalized structure before storing or processing it.
+
+## GPS Data Collection Workflow
+
+1. Background scheduler runs at a configurable interval.
+2. Backend calls the GPS provider API.
+3. Fetch latest location of all registered vehicles.
+4. Normalize GPS coordinates.
+5. Validate coordinates and timestamps.
+6. Save valid GPS records.
+7. Update vehicle's latest location.
+8. Trigger PID visit detection.
+9. Update route coverage.
+10. Make updated information available to the frontend.
+
+Recommended starting polling interval: 30–60 seconds, subject to the GPS provider's API limits and actual data frequency.
+
+Do not make GPS API calls separately for every frontend user. Fetch centrally through the backend.
+
+# 8. AUTOMATIC PID VISIT DETECTION ENGINE
+
+This is the core functionality of the complete portal.
+
+The system must automatically detect whether a vehicle has passed near a registered PID using GPS coordinates.
+
+## 8.1 Basic Logic
+
+Every PID has a fixed latitude and longitude.
+
+Every GPS record contains:
+- Vehicle latitude
+- Vehicle longitude
+- GPS timestamp
+
+Calculate the geographical distance between the GPS point and PID coordinates using the Haversine formula.
+
+If the distance is within the configured visit radius, consider that PID as a GPS proximity match.
+
+Example:
+
+PID coordinates:
+
+Latitude: 28.4082  
+Longitude: 77.3178
+
+Vehicle GPS coordinates:
+
+Latitude: 28.4084  
+Longitude: 77.3179
+
+Distance: Approximately 24 metres.
+
+If configured radius is 30 metres, the system can register a GPS visit candidate.
+
+## 8.2 Configurable Detection Parameters
+
+Create an admin configuration module.
+
+Default starting configuration:
+
+- PID detection radius: 30 metres.
+- Minimum GPS quality: Valid coordinates and timestamp.
+- Maximum acceptable GPS data age: 5 minutes.
+- Minimum speed: Configurable.
+- Maximum speed: Configurable.
+- Consecutive GPS confirmation points: 2.
+- Duplicate visit prevention: Enabled.
+- Visit detection enabled: Yes.
+
+These are initial configurable values, not universal GPS accuracy guarantees. They must be tested in actual field conditions and adjusted.
+
+Do not permanently hardcode these values.
+
+## 8.3 Visit Detection Algorithm
+
+For every new valid GPS coordinate:
+
+1. Identify the vehicle.
+2. Identify its active route assignment for that date.
+3. Fetch PIDs assigned to that route.
+4. Find PIDs located within the configured search radius.
+5. Calculate accurate distance using Haversine.
+6. Validate GPS timestamp and data quality.
+7. Check whether the vehicle was moving or stationary.
+8. Check consecutive GPS points when available.
+9. Confirm the proximity event.
+10. Save the PID visit record.
+11. Update the daily PID coverage status.
+
+Use a spatial pre-filter or geographical bounding box to avoid calculating the distance against every PID in the database for every GPS point.
+
+Use appropriate MySQL indexes and optimize queries.
+
+## 8.4 Duplicate Detection
+
+A PID should not be counted multiple times for the same vehicle and route assignment on the same operational day unless a separate revisit event is intentionally recorded.
+
+Store:
+- First visit time
+- Last visit time
+- Number of detection events
+- Vehicle ID
+- Route ID
+- Distance from PID
+- GPS record reference
+- Detection status
+
+Maintain raw GPS data separately from visit detection records.
+
+## 8.5 Important GPS Accuracy Considerations
+
+The system must not mark a PID visited based on an unreliable single GPS point.
+
+Consider:
+- GPS accuracy variation.
+- Dense residential streets.
+- Adjacent properties.
+- GPS signal drift.
+- Duplicate coordinates.
+- Missing GPS points.
+- Vehicle passing on a nearby parallel road.
+
+If a vehicle passes close to several nearby PIDs, the system must not automatically claim that each individual property was collected.
+
+Use the following detection classifications:
+
+- GPS Visit Confirmed: Sufficient valid proximity evidence.
+- GPS Visit Candidate: Proximity detected but confirmation conditions are incomplete.
+- Not Visited: No qualifying proximity event found.
+- GPS Data Unavailable: Insufficient GPS data to determine coverage.
+- Unassigned PID: PID is not assigned to an active route.
+
+Allow the administrator to configure whether consecutive GPS points, dwell time, or other evidence are required.
+
+**Do not represent GPS proximity as proof of physical garbage collection.**
+
+# 9. DAILY ROUTE AND PID ASSIGNMENT WORKFLOW
+
+Implement date-wise route assignments.
+
+Example:
+
+Date: 05 November 2026  
+Vehicle: HR38AB1234  
+Agency: ABC Agency  
+Route: ROUTE001  
+Ward: Ward 12
+
+Assigned PIDs:
+- PID10001
+- PID10002
+- PID10003
+- PID10004
+- PID10005
+
+The system must maintain a snapshot of assigned PIDs for the operational date so historical reports do not change when the master route is edited later.
+
+Daily workflow:
+
+1. Admin creates or imports daily assignments.
+2. System maps vehicles with routes.
+3. System maps routes with assigned PIDs.
+4. GPS tracking starts.
+5. Vehicle coordinates are fetched.
+6. Visit detection engine processes GPS points.
+7. PID statuses update automatically.
+8. Supervisor views the progress.
+9. End-of-day report is generated.
+
+# 10. LIVE VEHICLE TRACKING MODULE
+
+Create an interactive map-based live tracking screen.
+
+Map features:
+
+- Show all active vehicles.
+- Show current vehicle positions.
+- Display vehicle registration numbers.
+- Display vehicle status.
+- Show vehicle speed.
+- Show last GPS update time.
+- Show ignition status when available.
+- Show route assignment.
+- Show vehicle details on marker click.
+- Differentiate online, offline, and inactive vehicles.
+- Refresh vehicle locations automatically.
+
+Filters:
+
+- Zone
+- Ward
+- Agency
+- Vehicle
+- Vehicle Type
+- Route
+- Vehicle Status
+
+When a user clicks a vehicle marker, show a side panel with:
+
+- Vehicle Number
+- Agency
+- Assigned Route
+- Current Latitude
+- Current Longitude
+- Speed
+- Ignition Status
+- Last Updated
+- Today's GPS Visit Count
+- Assigned PID Count
+- Covered PID Count
+- Remaining PID Count
+
+# 11. PID COVERAGE MAP
+
+Create a separate map screen for monitoring property-wise coverage.
+
+Display:
+- All assigned PIDs.
+- Vehicle's current location.
+- Assigned route.
+- Actual GPS movement trail.
+- Visited PIDs.
+- Unvisited PIDs.
+- GPS candidate PIDs.
+- GPS data unavailable PIDs.
+
+Suggested map colors:
+
+- Green: GPS Visit Confirmed.
+- Yellow: GPS Visit Candidate.
+- Red: Not Visited.
+- Grey: GPS Data Unavailable.
+- Blue: Current vehicle location.
+- Orange: Actual GPS trail.
+- Purple: Assigned route.
+
+Use a legend explaining every color.
+
+On clicking a PID marker, display:
+
+- PID Number
+- Address
+- Ward
+- Zone
+- Assigned Route
+- Assigned Vehicle
+- GPS Visit Status
+- First Visit Time
+- Last Visit Time
+- Vehicle Number
+- Distance from PID at detection
+- GPS Evidence Details
+
+Provide a toggle to show or hide:
+- Assigned route
+- Actual GPS route
+- All PIDs
+- Visited PIDs
+- Unvisited PIDs
+
+# 12. ROUTE COVERAGE COMPARISON
+
+Create a route comparison feature.
+
+Show two different layers:
+
+**Assigned Route:**
+The planned route assigned to the vehicle.
+
+**Actual GPS Route:**
+The actual movement recorded by the vehicle GPS tracker.
+
+The system should calculate:
+
+- Assigned PID Count
+- GPS Visited PID Count
+- Remaining PID Count
+- Coverage Percentage
+- GPS Route Distance (where reliable data is available)
+- Assigned Route Deviation (if route geometry is available)
+- First GPS Activity
+- Last GPS Activity
+
+Coverage formula:
+
+Coverage Percentage = (GPS Visited Assigned PIDs / Total Assigned PIDs) × 100
+
+Do not calculate coverage using all PIDs in the ward. Only count PIDs assigned to the relevant route for the selected operational date.
+
+# 13. DASHBOARD
+
+Create a modern administrative dashboard.
+
+Display summary cards:
+
+1. Total Registered Vehicles
+2. Active Vehicles
+3. Offline Vehicles
+4. Total Registered PIDs
+5. Today's Assigned PIDs
+6. GPS Visited PIDs
+7. Remaining PIDs
+8. GPS Coverage Percentage
+
+Charts:
+
+- Zone-wise PID Coverage.
+- Ward-wise PID Coverage.
+- Agency-wise Performance.
+- Vehicle-wise Performance.
+- Daily Coverage Trend.
+- Hourly GPS Activity.
+
+Add date, zone, ward, agency, and vehicle filters.
+
+All dashboard figures must come from actual database records and respect the logged-in user's permissions.
+
+# 14. REPORTING MODULE
+
+Create downloadable reports.
+
+## 14.1 Daily PID Coverage Report
+
+Columns:
+- Date
+- Zone
+- Ward
+- PID Number
+- Address
+- Assigned Route
+- Vehicle Number
+- Agency
+- Visit Status
+- First Visit Time
+- Last Visit Time
+- Distance from PID
+- Detection Evidence
+
+## 14.2 Vehicle-wise Report
+
+Columns:
+- Date
+- Vehicle Number
+- Agency
+- Assigned Route
+- Assigned PID Count
+- GPS Visited PID Count
+- Remaining PID Count
+- Coverage Percentage
+- First GPS Activity
+- Last GPS Activity
+
+## 14.3 Agency-wise Report
+
+Columns:
+- Agency
+- Total Assigned Vehicles
+- Active Vehicles
+- Total Assigned PIDs
+- GPS Visited PIDs
+- Remaining PIDs
+- Coverage Percentage
+
+## 14.4 Ward-wise Report
+
+Columns:
+- Zone
+- Ward
+- Total Assigned PIDs
+- GPS Visited PIDs
+- Remaining PIDs
+- Coverage Percentage
+
+## 14.5 Missed PID Report
+
+Show all assigned PIDs without a qualifying GPS visit for the selected operational date.
+
+Differentiate between:
+- Not Visited
+- GPS Data Unavailable
+- GPS Visit Candidate
+
+## 14.6 Historical Vehicle Tracking Report
+
+Allow the user to select:
+- Date
+- Vehicle
+- Start Time
+- End Time
+
+Display historical vehicle movement on the map.
+
+Export reports in Excel and PDF formats.
+
+# 15. DATABASE DESIGN
+
+Create normalized MySQL tables with foreign keys, indexes, timestamps, and appropriate data types.
+
+Suggested tables:
+
+### users
+- id
+- name
+- email
+- password_hash
+- role_id
+- zone_id
+- ward_id
+- agency_id
+- status
+- created_at
+- updated_at
+
+### roles
+- id
+- role_name
+- permissions
+
+### zones
+- id
+- zone_name
+- zone_code
+- status
+
+### wards
+- id
+- zone_id
+- ward_name
+- ward_number
+- status
+
+### agencies
+- id
+- agency_name
+- contact_person
+- mobile
+- address
+- status
+
+### vehicles
+- id
+- vehicle_number
+- vehicle_type
+- gps_device_id
+- gps_provider
+- agency_id
+- zone_id
+- ward_id
+- status
+
+### pids
+- id
+- pid_number
+- owner_name
+- mobile
+- address
+- zone_id
+- ward_id
+- latitude
+- longitude
+- status
+- created_at
+- updated_at
+
+### routes
+- id
+- route_name
+- zone_id
+- ward_id
+- agency_id
+- route_geometry
+- status
+
+### route_assignments
+- id
+- route_id
+- vehicle_id
+- operational_date
+- assigned_by
+- created_at
+
+### route_assignment_pids
+- id
+- route_assignment_id
+- pid_id
+
+### gps_locations
+- id
+- vehicle_id
+- device_id
+- latitude
+- longitude
+- speed
+- ignition
+- gps_accuracy
+- recorded_at
+- received_at
+
+### vehicle_latest_locations
+- vehicle_id
+- latitude
+- longitude
+- speed
+- ignition
+- recorded_at
+- received_at
+
+### pid_visit_events
+- id
+- route_assignment_id
+- pid_id
+- vehicle_id
+- gps_location_id
+- distance_meters
+- detected_at
+- evidence_status
+- created_at
+
+### pid_daily_status
+- id
+- operational_date
+- route_assignment_id
+- pid_id
+- vehicle_id
+- visit_status
+- first_visit_at
+- last_visit_at
+- detection_count
+- updated_at
+
+### system_settings
+- id
+- setting_key
+- setting_value
+- description
+- updated_at
+
+### activity_logs
+- id
+- user_id
+- action
+- module
+- reference_id
+- created_at
+
+Use unique constraints to prevent duplicate daily assignments and duplicate visit status records.
+
+Use appropriate indexes on:
+- gps_locations(vehicle_id, recorded_at)
+- pids(ward_id)
+- pids(latitude, longitude) or a suitable spatial index
+- route_assignments(operational_date, vehicle_id)
+- route_assignment_pids(route_assignment_id, pid_id)
+- pid_daily_status(operational_date, route_assignment_id, pid_id)
+- pid_visit_events(pid_id, detected_at)
+
+Review and optimize the schema before implementation. Use transactions where multiple related records must be saved together.
+
+# 16. BACKEND ARCHITECTURE
+
+Follow a modular and maintainable architecture.
+
+Suggested folder structure:
+
+```text
+server/
+  src/
+    config/
+      database.js
+      gpsConfig.js
+
+    controllers/
+      authController.js
+      dashboardController.js
+      vehicleController.js
+      pidController.js
+      routeController.js
+      gpsController.js
+      reportController.js
+
+    services/
+      gpsTrackerService.js
+      gpsNormalizationService.js
+      pidDetectionService.js
+      routeCoverageService.js
+      reportService.js
+
+    repositories/
+      vehicleRepository.js
+      pidRepository.js
+      gpsRepository.js
+      routeRepository.js
+
+    routes/
+      authRoutes.js
+      dashboardRoutes.js
+      vehicleRoutes.js
+      pidRoutes.js
+      routeRoutes.js
+      gpsRoutes.js
+      reportRoutes.js
+
+    middleware/
+      authMiddleware.js
+      roleMiddleware.js
+      errorMiddleware.js
+      validationMiddleware.js
+
+    jobs/
+      gpsPollingJob.js
+      pidVisitProcessingJob.js
+      dailyCoverageJob.js
+
+    utils/
+      haversine.js
+      responseHandler.js
+      logger.js
+
+    validators/
+    app.js
+    index.js
+```
+
+Use:
+- Centralized error handling.
+- Standard API response format.
+- Request validation.
+- Secure authentication.
+- Parameterized SQL queries.
+- Logging.
+- Environment-based configuration.
+- Unit and integration tests.
+
+Example response:
+
+```json
+{
+  "success": true,
+  "message": "PID coverage fetched successfully",
+  "data": [],
+  "pagination": {
+    "page": 1,
+    "limit": 20,
+    "total": 100
+  }
+}
+```
+
+# 17. API ENDPOINTS
+
+Implement REST APIs.
+
+## Authentication
+
+POST /api/auth/login  
+GET /api/auth/profile  
+POST /api/auth/logout
+
+## Dashboard
+
+GET /api/dashboard/summary  
+GET /api/dashboard/zone-coverage  
+GET /api/dashboard/ward-coverage  
+GET /api/dashboard/agency-performance  
+GET /api/dashboard/vehicle-performance
+
+## Vehicles
+
+GET /api/vehicles  
+GET /api/vehicles/:id  
+POST /api/vehicles  
+PUT /api/vehicles/:id  
+GET /api/vehicles/:id/latest-location  
+GET /api/vehicles/:id/history
+
+## PIDs
+
+GET /api/pids  
+GET /api/pids/:id  
+POST /api/pids  
+PUT /api/pids/:id  
+POST /api/pids/import  
+GET /api/pids/coverage
+
+## Routes
+
+GET /api/routes  
+POST /api/routes  
+PUT /api/routes/:id  
+GET /api/routes/:id/pids  
+POST /api/routes/:id/assign-pids  
+POST /api/route-assignments  
+GET /api/route-assignments
+
+## GPS
+
+GET /api/gps/live-vehicles  
+GET /api/gps/vehicle-history  
+GET /api/gps/provider-status
+
+## PID Visits
+
+GET /api/pid-visits  
+GET /api/pid-visits/daily-summary  
+GET /api/pid-visits/missed  
+GET /api/pid-visits/:pidId/history
+
+## Reports
+
+GET /api/reports/daily-coverage  
+GET /api/reports/vehicle-wise  
+GET /api/reports/agency-wise  
+GET /api/reports/ward-wise  
+GET /api/reports/missed-pids  
+GET /api/reports/export-excel
+
+Apply authentication, authorization, validation, pagination, and filtering to all relevant endpoints.
+
+# 18. FRONTEND PAGES
+
+Create the following screens:
+
+1. Login Page
+2. Main Dashboard
+3. Live Vehicle Tracking
+4. PID Coverage Map
+5. Route Management
+6. Daily Route Assignment
+7. PID Master
+8. Vehicle Master
+9. Agency Master
+10. Zone Master
+11. Ward Master
+12. Daily PID Coverage Report
+13. Vehicle-wise Report
+14. Agency-wise Report
+15. Ward-wise Report
+16. Missed PID Report
+17. Historical GPS Tracking
+18. User Management
+19. GPS Integration Settings
+20. Visit Detection Settings
+21. Activity Logs
+
+Use a professional municipal administration dashboard design.
+
+Design requirements:
+- Responsive interface.
+- Sidebar navigation.
+- Header with user profile.
+- Summary cards.
+- Search and filter functionality.
+- Paginated tables.
+- Map-based monitoring.
+- Loading states.
+- Empty states.
+- Error handling.
+- Confirmation dialogs.
+- Consistent color-coded statuses.
+
+Do not display unnecessary user or PID information on the dashboard. Provide detailed information when a user opens a specific record.
+
+# 19. REAL-TIME FRONTEND UPDATES
+
+Use Socket.IO or another suitable real-time mechanism.
+
+When new GPS coordinates are received:
+
+1. Backend updates vehicle location.
+2. Backend processes PID visit detection.
+3. Backend emits vehicle location updates.
+4. Frontend updates vehicle markers.
+5. Frontend updates PID coverage statuses.
+6. Dashboard metrics refresh.
+
+Do not reload the entire page every few seconds.
+
+Use efficient event-based updates and reconnect handling.
+
+# 20. SECURITY REQUIREMENTS
+
+- Use JWT authentication.
+- Hash passwords using bcrypt or Argon2.
+- Apply RBAC to all protected APIs.
+- Validate all request parameters.
+- Use parameterized SQL queries.
+- Protect against SQL injection.
+- Apply rate limiting to authentication APIs.
+- Store GPS API credentials in environment variables.
+- Do not expose GPS provider credentials in frontend code.
+- Use HTTPS in production.
+- Maintain activity logs.
+- Restrict access by zone, ward, or agency as appropriate.
+
+# 21. PERFORMANCE REQUIREMENTS
+
+The system may contain thousands of vehicles and hundreds of thousands of PIDs and GPS records.
+
+Therefore:
+
+- Do not fetch all GPS history on every page load.
+- Fetch only required records.
+- Use pagination.
+- Use database indexes.
+- Process GPS data in batches.
+- Use geographical pre-filtering for PID detection.
+- Avoid checking every PID against every GPS point.
+- Keep latest vehicle locations separately for fast live tracking.
+- Consider archiving old GPS data.
+- Avoid duplicate GPS processing.
+- Use background workers for heavy operations.
+- Monitor GPS provider API limits.
+
+For large-scale deployments, evaluate MySQL partitioning or archival strategies for historical GPS records.
+
+# 22. IMPORTANT EDGE CASES
+
+The system must handle:
+
+1. Vehicle GPS device offline.
+2. GPS API unavailable.
+3. Duplicate GPS records.
+4. Invalid latitude or longitude.
+5. Missing PID coordinates.
+6. PID assigned to multiple routes.
+7. Vehicle reassigned to a different route.
+8. Vehicle passing near multiple PIDs.
+9. GPS signal drifting.
+10. Vehicle moving very fast.
+11. Vehicle stopped near a PID.
+12. Vehicle taking an alternate route.
+13. Missing GPS points.
+14. Historical data arriving late.
+15. GPS data received out of chronological order.
+16. Vehicle operating across midnight.
+17. Duplicate daily assignments.
+18. Route updated after operational activity has started.
+
+The system must use the GPS recording timestamp, not merely the API response receipt time, when determining operational visit dates.
+
+Use an explicitly configured operational timezone, defaulting to Asia/Kolkata.
+
+# 23. DAILY OPERATIONAL WORKFLOW
+
+The complete system must operate as follows:
+
+**Step 1: Master Setup**
+
+Admin creates zones, wards, agencies, vehicles, and PIDs.
+
+**Step 2: PID Geolocation**
+
+All PIDs are imported with latitude and longitude. Missing coordinates are corrected using the map.
+
+**Step 3: Route Creation**
+
+Admin creates routes and assigns relevant PIDs.
+
+**Step 4: Vehicle Assignment**
+
+Vehicles and agencies are mapped to routes for a particular operational date.
+
+**Step 5: GPS Data Collection**
+
+Background job fetches GPS locations from the provider.
+
+**Step 6: GPS Processing**
+
+Backend normalizes and stores vehicle GPS coordinates.
+
+**Step 7: PID Detection**
+
+The detection engine checks whether vehicles pass within the configured distance of assigned PIDs.
+
+**Step 8: Coverage Update**
+
+Qualifying proximity events update PID daily statuses.
+
+**Step 9: Live Monitoring**
+
+Supervisors view vehicle positions, routes, visited PIDs, and remaining PIDs.
+
+**Step 10: Daily Reporting**
+
+At the end of the operational day, reports are generated automatically.
+
+**Step 11: Historical Review**
+
+Administrators can view previous dates, routes, vehicle activity, and PID coverage.
+
+# 24. TESTING REQUIREMENTS
+
+Before production deployment, test the following:
+
+- GPS API integration with real sample responses.
+- GPS coordinate normalization.
+- Haversine distance calculation.
+- PID proximity detection.
+- Consecutive-point confirmation.
+- Duplicate visit prevention.
+- Route assignment validation.
+- Historical GPS tracking.
+- Live map updates.
+- Zone and ward filters.
+- Role-based permissions.
+- Excel import validation.
+- Daily coverage calculations.
+- Missing GPS data handling.
+- Performance with large GPS datasets.
+
+Use simulated GPS coordinates to test detection before relying on live vehicles.
+
+Also perform a field validation exercise with a few vehicles and manually verified PID locations. Tune detection radius and confirmation conditions based on actual results.
+
+# 25. DEVELOPMENT PHASES
+
+Develop the system in the following order.
+
+### Phase 1: Foundation
+- Project setup.
+- Database configuration.
+- Authentication.
+- RBAC.
+- Master data modules.
+
+### Phase 2: PID and Route Management
+- PID import.
+- Coordinate validation.
+- Map-based PID selection.
+- Route creation.
+- Vehicle and route assignments.
+
+### Phase 3: GPS Integration
+- Provider API integration.
+- GPS normalization.
+- GPS history storage.
+- Live vehicle locations.
+
+### Phase 4: PID Visit Detection
+- Haversine implementation.
+- Geographical pre-filtering.
+- Proximity detection.
+- Duplicate prevention.
+- Daily PID status calculation.
+
+### Phase 5: Monitoring Dashboard
+- Live tracking.
+- PID coverage map.
+- Assigned versus actual route comparison.
+- Dashboard metrics.
+
+### Phase 6: Reports
+- Daily coverage.
+- Vehicle-wise reports.
+- Agency-wise reports.
+- Ward-wise reports.
+- Missed PID reports.
+- Excel and PDF exports.
+
+### Phase 7: Testing and Deployment
+- Functional testing.
+- Performance optimization.
+- Security review.
+- Production deployment.
+- Logging and monitoring.
+
+# 26. ACCEPTANCE CRITERIA
+
+The project will be considered functionally complete when:
+
+1. Admin can import and manage PIDs.
+2. Each PID can have valid geographical coordinates.
+3. Admin can create routes and assign PIDs.
+4. Vehicles can be mapped to GPS device IDs.
+5. GPS data is automatically fetched from the existing provider.
+6. Live vehicle locations appear on the map.
+7. Vehicle GPS movement is stored historically.
+8. PID proximity detection works automatically.
+9. Duplicate visits are not counted incorrectly.
+10. Daily PID coverage is calculated correctly.
+11. Visited and unvisited PIDs appear with distinct map colors.
+12. Vehicle-wise and agency-wise coverage is available.
+13. Supervisors can monitor their assigned zones and wards.
+14. Historical reports are available.
+15. Excel/PDF reports can be exported.
+16. GPS failures and missing coordinates are handled safely.
+17. The system works without requiring additional physical hardware.
+
+# 27. INSTRUCTIONS TO THE AI DEVELOPMENT AGENT
+
+You are acting as a Senior Full Stack Developer and System Architect.
+
+Your responsibility is to implement this project as a complete, production-oriented web application.
+
+Follow these instructions strictly:
+
+1. First inspect the existing repository and understand its current architecture.
+2. If an existing project is available, reuse its existing conventions and avoid unnecessary rewrites.
+3. Do not create a completely new architecture without first reviewing the existing code.
+4. Implement the database schema and migrations.
+5. Implement backend modules and APIs.
+6. Implement frontend pages and integrate them with the backend.
+7. Use real database data. Do not use hardcoded dashboard statistics in production.
+8. Do not use mock GPS data in production.
+9. Keep GPS provider integration configurable.
+10. Do not assume the GPS provider's API format. Ask for its documentation or sample API response before implementing provider-specific authentication and endpoints.
+11. Keep PID visit detection independent from the GPS provider implementation.
+12. Ensure the detection engine is idempotent and does not generate duplicate visits.
+13. Maintain historical route assignments and daily PID snapshots.
+14. Add validation, error handling, logging, and tests.
+15. Follow responsive UI design standards.
+16. Do not leave important functionality as dummy buttons or static screens.
+17. Do not mark a PID as physically collected merely because a vehicle passed nearby.
+18. Document all environment variables and deployment instructions.
+19. Run tests and fix errors before considering each phase complete.
+20. Do not attempt to implement the entire application in one unreviewed code-generation step.
+
+**Development approach:**
+
+First provide:
+- Existing repository analysis.
+- Proposed architecture.
+- Database ER diagram.
+- Database schema.
+- Development milestones.
+- List of required GPS provider API details.
+
+Then implement one phase at a time.
+
+After each phase:
+- Explain files created or modified.
+- Explain APIs implemented.
+- Explain database changes.
+- Run relevant tests.
+- Report remaining tasks.
+
+Do not move to the next phase until the current phase is working correctly.
+
+**Final Goal:** Build a complete Garbage Collection GPS Monitoring Portal that automatically tracks vehicle movements, detects PID proximity visits, measures assigned route coverage, and provides reliable operational reports to municipal authorities.

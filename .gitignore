@@ -1,0 +1,18 @@
+# dependencies
+node_modules/
+
+# environment / secrets
+.env
+*.env.local
+.env.*.local
+be/dbconnection.txt
+
+# build output
+dist/
+build/
+coverage/
+
+# logs / OS
+*.log
+.DS_Store
+Thumbs.db
