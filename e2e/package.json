@@ -1,0 +1,12 @@
+{
+  "name": "gps-pid-scanner-e2e",
+  "private": true,
+  "type": "module",
+  "description": "End-to-end tests (Playwright, installed Chrome). Runs against a throwaway e2e_* schema, never public.",
+  "scripts": {
+    "test": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.1"
+  }
+}

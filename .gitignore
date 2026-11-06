@@ -22,3 +22,7 @@ Thumbs.db
 
 # generated report archive (GUIDE #10 C)
 /be/storage/
+
+# e2e run state (generated test credentials, logs, artifacts)
+/e2e/.state/
+/e2e/node_modules/

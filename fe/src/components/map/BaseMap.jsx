@@ -15,9 +15,17 @@ L.Icon.Default.mergeOptions({ iconRetinaUrl: markerIcon2x, iconUrl: markerIcon, 
  * Configurable base map. `preferCanvas` renders vector layers (our PID CircleMarkers) on one canvas
  * instead of thousands of SVG/DOM nodes.
  */
+// End-to-end tests only (build with VITE_E2E=1): expose the Leaflet map so Playwright can turn a PID's
+// lat/lng into a screen point (markers are drawn on one canvas, so there is no DOM node to click).
+// The flag is replaced at build time: production bundles contain no hook.
+const e2eRef = import.meta.env.VITE_E2E === '1'
+  ? (m) => { if (m) window.__e2eMap = m; }
+  : undefined;
+
 export function BaseMap({ center = MAP_CONFIG.center, zoom = MAP_CONFIG.zoom, className = 'h-[480px]', children, ...rest }) {
   return (
     <MapContainer
+      ref={e2eRef}
       center={center}
       zoom={zoom}
       maxZoom={MAP_CONFIG.maxZoom}
